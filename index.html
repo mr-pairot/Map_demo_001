@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>รถไฟฟ้ายกระดับ 3D | MapLibre + Three.js</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="map" role="region" aria-label="แผนที่ 3 มิติ"></div>
+
+  <aside class="panel" aria-label="แผงควบคุม">
+    <h1>รถไฟฟ้ายกระดับ 3D</h1>
+    <p class="sub">อาคารจาก OpenStreetMap กับทางยกระดับ สถานี และขบวนรถที่สร้างด้วย Three.js บนเส้นทางสมมุติ</p>
+
+    <!-- แถบเส้นทาง: แสดงตำแหน่งขบวนนำเทียบกับสถานี -->
+    <div class="strip" aria-hidden="true">
+      <span class="strip-track"></span>
+      <span class="strip-station" style="left:50%"></span>
+      <span class="strip-train" id="strip-train"></span>
+    </div>
+    <p id="status" class="status">กำลังโหลดแผนที่…</p>
+
+    <button id="btn-play" class="btn primary" type="button" aria-pressed="true">หยุดขบวน</button>
+
+    <label class="field">
+      <span>ความเร็ว <output id="speed-out" for="speed">80</output> กม./ชม.</span>
+      <input type="range" id="speed" min="20" max="160" step="10" value="80">
+    </label>
+
+    <fieldset class="toggles">
+      <legend>การแสดงผล</legend>
+      <label class="check"><input type="checkbox" id="chk-buildings" checked> อาคาร 3D</label>
+      <label class="check"><input type="checkbox" id="chk-follow"> กล้องติดตามขบวน</label>
+    </fieldset>
+
+    <div class="views" role="group" aria-label="มุมกล้อง">
+      <button class="btn" type="button" data-view="overview">ภาพรวม</button>
+      <button class="btn" type="button" data-view="station">สถานี</button>
+      <button class="btn" type="button" data-view="top">มุมบน</button>
+    </div>
+  </aside>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
