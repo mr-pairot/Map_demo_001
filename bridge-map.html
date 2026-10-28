@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>วางสะพานบนแผนที่ | MapLibre + Three.js</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="bridge.css">
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body class="placer">
+  <div id="map" role="region" aria-label="แผนที่ 3 มิติสำหรับวางสะพาน"></div>
+
+  <aside class="panel tall" aria-label="แผงวางสะพาน">
+    <header>
+      <h1>วางสะพานบนแผนที่</h1>
+      <p class="sub">เลือกแบบสะพาน กำหนดพิกัด แล้วกดวาง ตำแหน่งทั้งหมดดาวน์โหลดเป็น GeoJSON ได้</p>
+    </header>
+
+    <section class="block" aria-labelledby="h-model">
+      <h2 id="h-model">แบบสะพาน</h2>
+      <p id="model-info" class="model-info"></p>
+      <div class="row2">
+        <button id="btn-from-builder" class="btn" type="button">ใช้แบบล่าสุด</button>
+        <button id="btn-open-model" class="btn" type="button">เปิด .json / .glb</button>
+      </div>
+      <input id="file-model" type="file" accept=".json,.glb,application/json,model/gltf-binary" hidden>
+      <a class="inline-link" href="bridge-builder.html">แก้แบบในหน้าออกแบบ</a>
+    </section>
+
+    <section class="block" aria-labelledby="h-pos">
+      <h2 id="h-pos">ตำแหน่ง</h2>
+      <div class="segmented">
+        <label><input type="radio" name="mode" value="point" checked><span>จุดเดียว + ทิศทาง</span></label>
+        <label><input type="radio" name="mode" value="line"><span>จุดเริ่ม–จุดปลาย</span></label>
+      </div>
+
+      <div class="grid2">
+        <label class="field"><span>ละติจูดจุดเริ่ม</span><input id="start-lat" type="number" step="0.000001" min="-90" max="90" inputmode="decimal"></label>
+        <label class="field"><span>ลองจิจูดจุดเริ่ม</span><input id="start-lng" type="number" step="0.000001" min="-180" max="180" inputmode="decimal"></label>
+      </div>
+
+      <div class="grid2" data-mode="line" hidden>
+        <label class="field"><span>ละติจูดจุดปลาย</span><input id="end-lat" type="number" step="0.000001" min="-90" max="90" inputmode="decimal"></label>
+        <label class="field"><span>ลองจิจูดจุดปลาย</span><input id="end-lng" type="number" step="0.000001" min="-180" max="180" inputmode="decimal"></label>
+      </div>
+
+      <div class="field" data-mode="point">
+        <label for="bearing">ทิศทางสะพาน (องศาจากทิศเหนือ)</label>
+        <div class="range-row">
+          <input id="bearing-range" type="range" min="0" max="359" step="1" aria-label="ทิศทางสะพาน">
+          <input id="bearing" type="number" min="0" max="359.9" step="0.5" inputmode="decimal">
+        </div>
+      </div>
+
+      <label class="field" data-mode="line" hidden>
+        <span>ให้สะพานพอดีระยะจุดเริ่ม–จุดปลาย โดย</span>
+        <select id="fit-mode">
+          <option value="count">ปรับจำนวน span</option>
+          <option value="length">ปรับความยาว span</option>
+        </select>
+      </label>
+
+      <button id="btn-pick" class="btn" type="button" aria-pressed="false">เลือกจุดบนแผนที่</button>
+      <p id="draft-info" class="status" aria-live="polite"></p>
+      <button id="btn-place" class="btn primary" type="button">วางสะพาน</button>
+    </section>
+
+    <section class="block" aria-labelledby="h-placed">
+      <h2 id="h-placed">สะพานที่วางแล้ว</h2>
+      <ul id="placed-list" class="placed-list"></ul>
+      <div class="row2">
+        <button id="btn-export" class="btn" type="button">ดาวน์โหลด .geojson</button>
+        <button id="btn-import" class="btn" type="button">เปิด .geojson</button>
+      </div>
+      <input id="file-geojson" type="file" accept=".geojson,.json,application/geo+json,application/json" hidden>
+    </section>
+
+    <label class="check"><input type="checkbox" id="chk-buildings" checked> อาคาร 3D</label>
+
+    <nav class="links" aria-label="หน้าอื่น">
+      <a href="bridge-builder.html">หน้าออกแบบสะพาน</a>
+      <a href="index.html">แผนที่ตัวอย่าง</a>
+    </nav>
+  </aside>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="bridge-map.js"></script>
+</body>
+</html>

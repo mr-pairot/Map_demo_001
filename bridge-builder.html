@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ออกแบบสะพาน | ตอม่อและพื้นสะพาน 3D</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="bridge.css">
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body class="builder">
+  <canvas id="preview" aria-label="ภาพ 3 มิติของสะพาน ลากเพื่อหมุน ถ่างนิ้วหรือเลื่อนล้อเมาส์เพื่อซูม"></canvas>
+
+  <aside class="panel tall" aria-label="ค่าการออกแบบสะพาน">
+    <header>
+      <h1>ออกแบบสะพาน</h1>
+      <p class="sub">กำหนดตอม่อ พื้นสะพาน และช่วงสะพาน แล้วส่งไปวางบนแผนที่หรือดาวน์โหลดเป็นไฟล์</p>
+    </header>
+
+    <figure class="section-view">
+      <div id="section-svg"></div>
+      <figcaption>หน้าตัดตอม่อ มองตามแนวสะพาน</figcaption>
+    </figure>
+
+    <form id="bridge-form" class="form" novalidate>
+      <label class="field">
+        <span>ชื่อสะพาน</span>
+        <input name="name" type="text" maxlength="60" autocomplete="off">
+      </label>
+
+      <fieldset class="group">
+        <legend>ชนิดตอม่อ</legend>
+        <div class="type-cards">
+          <label class="type-card">
+            <input type="radio" name="pierType" value="A">
+            <svg viewBox="0 0 48 40" aria-hidden="true">
+              <path d="M6 6h36v4l-14 7h-8l-14-7z" />
+              <rect x="20" y="17" width="8" height="21" />
+            </svg>
+            <span><b>Type A</b> เสาเดี่ยว</span>
+          </label>
+          <label class="type-card">
+            <input type="radio" name="pierType" value="B">
+            <svg viewBox="0 0 48 40" aria-hidden="true">
+              <rect x="4" y="6" width="40" height="8" />
+              <rect x="10" y="14" width="6" height="24" />
+              <rect x="32" y="14" width="6" height="24" />
+            </svg>
+            <span><b>Type B</b> เสาคู่</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>พื้นสะพาน</legend>
+        <div class="segmented">
+          <label><input type="radio" name="deckType" value="concrete"><span>คอนกรีต</span></label>
+          <label><input type="radio" name="deckType" value="truss"><span>โครงเหล็ก</span></label>
+        </div>
+      </fieldset>
+
+      <div class="grid2">
+        <label class="field">
+          <span>ระดับพื้นสะพาน (ม.)</span>
+          <input name="deckLevel" type="number" min="4" max="40" step="0.5" inputmode="decimal">
+        </label>
+        <label class="field">
+          <span>ความลึกคาน (ม.)</span>
+          <input name="girderDepth" type="number" min="0" max="6" step="0.1" inputmode="decimal" aria-describedby="hint-girder">
+          <small id="hint-girder">0 = คำนวณให้</small>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="in-width">ความกว้างพื้นสะพาน (ม.)</label>
+        <input id="in-width" name="deckWidth" type="number" min="4" max="20" step="0.5" inputmode="decimal">
+        <div class="chips" data-for="deckWidth" role="group" aria-label="ค่าความกว้างที่ใช้บ่อย"></div>
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="in-span">ความยาว span (ม.)</label>
+          <input id="in-span" name="spanLength" type="number" min="10" max="80" step="1" inputmode="decimal">
+        </div>
+        <label class="field">
+          <span>จำนวน span</span>
+          <input name="spanCount" type="number" min="1" max="30" step="1" inputmode="numeric">
+        </label>
+      </div>
+      <div class="chips" data-for="spanLength" role="group" aria-label="ค่าความยาว span ที่ใช้บ่อย"></div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>ทางรถไฟ</span>
+          <select name="tracks">
+            <option value="2">ทางคู่</option>
+            <option value="1">ทางเดี่ยว</option>
+            <option value="0">ไม่แสดงราง</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>ขนาดราง</span>
+          <select name="gauge">
+            <option value="1">1.000 ม.</option>
+            <option value="1.435">1.435 ม.</option>
+          </select>
+        </label>
+      </div>
+    </form>
+
+    <dl id="summary" class="summary"></dl>
+    <div id="messages" class="messages" role="status" aria-live="polite"></div>
+
+    <div class="actions">
+      <button id="btn-place" class="btn primary wide" type="button">วางบนแผนที่</button>
+      <button id="btn-glb" class="btn" type="button">ดาวน์โหลด .glb</button>
+      <button id="btn-json" class="btn" type="button">ดาวน์โหลด .json</button>
+      <button id="btn-open" class="btn wide" type="button">เปิดไฟล์ .json</button>
+      <input id="file-json" type="file" accept=".json,application/json" hidden>
+    </div>
+
+    <nav class="links" aria-label="หน้าอื่น">
+      <a href="bridge-map.html">หน้าวางสะพาน</a>
+      <a href="index.html">แผนที่ตัวอย่าง</a>
+    </nav>
+  </aside>
+
+  <button id="btn-fit" class="btn fit-btn" type="button">จัดมุมกล้อง</button>
+
+  <script type="module" src="bridge-builder.js"></script>
+</body>
+</html>

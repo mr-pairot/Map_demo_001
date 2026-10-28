@@ -194,6 +194,18 @@ input:focus-visible {
   gap: 6px;
 }
 
+/* ===== ลิงก์ไปหน้าเครื่องมือสะพาน ===== */
+.tool-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+a.btn {
+  text-decoration: none;
+  text-align: center;
+}
+
 /* ===== มือถือ: ย้ายแผงลงด้านล่าง ===== */
 @media (max-width: 640px) {
   .panel {
@@ -207,5 +219,5 @@ input:focus-visible {
   }
   .sub { display: none; }
   .panel h1 { font-size: 1.05rem; }
-  .maplibregl-ctrl-bottom-right { bottom: 250px; }
+  .maplibregl-ctrl-bottom-right { bottom: 300px; }
 }

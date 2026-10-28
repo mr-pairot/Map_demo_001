@@ -1,0 +1,355 @@
+/* ซ่อนส่วนที่ไม่ใช้ในโหมดปัจจุบัน */
+[hidden] { display: none !important; }
+/* =========================================================
+   bridge.css — ส่วนเพิ่มสำหรับหน้าออกแบบสะพานและหน้าวางสะพาน
+   ใช้ตัวแปรสีจาก style.css
+   ========================================================= */
+:root {
+  --warn: #8a5a00;
+  --sec-concrete: #e3dfd6;
+  --sec-steel: #b9c6d2;
+  --sec-ballast: #b7afa3;
+  --field-bg: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --warn: #f0c060;
+    --sec-concrete: #4a4740;
+    --sec-steel: #3d5163;
+    --sec-ballast: #5b554c;
+    --field-bg: #1b222d;
+  }
+}
+
+:root[data-theme="dark"] {
+  --warn: #f0c060;
+  --sec-concrete: #4a4740;
+  --sec-steel: #3d5163;
+  --sec-ballast: #5b554c;
+  --field-bg: #1b222d;
+}
+
+/* ===== พื้นที่แสดงผล ===== */
+#preview {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ===== แผงยาวแบบเลื่อนได้ ===== */
+.panel.tall {
+  width: 340px;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+}
+
+.panel header { display: grid; gap: 6px; }
+.panel h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.form,
+.block { display: grid; gap: 10px; }
+
+.block {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.panel .field { align-content: start; }
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* ===== ช่องกรอก ===== */
+.field small { color: var(--muted); font-size: 0.78rem; }
+
+.field input[type="number"],
+.field input[type="text"],
+.field select {
+  font: inherit;
+  font-size: 0.92rem;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field-bg);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+.range-row {
+  display: grid;
+  grid-template-columns: 1fr 84px;
+  gap: 8px;
+  align-items: center;
+}
+.range-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 6px;
+}
+.group legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+/* ===== การ์ดเลือกชนิดตอม่อ ===== */
+.type-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.type-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field-bg);
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.type-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.type-card svg {
+  width: 56px;
+  height: 46px;
+  fill: var(--sec-concrete);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.type-card b { display: block; font-weight: 600; }
+
+.type-card:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.type-card:has(input:checked) svg { stroke: var(--accent); }
+.type-card:has(input:focus-visible) { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+/* ===== ปุ่มสลับสองทาง ===== */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--field-bg);
+}
+
+.segmented label { position: relative; cursor: pointer; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+
+.segmented span {
+  display: block;
+  padding: 7px 6px;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.segmented label + label span { border-left: 1px solid var(--line); }
+.segmented input:checked + span {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 500;
+}
+.segmented input:focus-visible + span { outline: 3px solid var(--signal); outline-offset: -3px; }
+
+/* ===== ค่าที่ใช้บ่อย ===== */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.chip {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--btn);
+  color: var(--ink);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.chip:hover { background: var(--btn-hover); }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+/* ===== ภาพหน้าตัด ===== */
+.section-view {
+  margin: 0;
+  padding: 8px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field-bg);
+}
+
+.section-view svg { display: block; width: 100%; height: auto; }
+
+.section-view figcaption {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.s-ground { stroke: var(--ink); stroke-width: 1.4; }
+.s-hatch { stroke: var(--muted); stroke-width: 1; opacity: 0.5; }
+.s-concrete { fill: var(--sec-concrete); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
+.s-steel { fill: var(--sec-steel); stroke: var(--ink); stroke-width: 1; }
+.s-pad { fill: var(--ink); }
+.s-ballast { fill: var(--sec-ballast); stroke: none; }
+.s-rail { fill: var(--ink); }
+.s-dim { stroke: var(--accent); stroke-width: 1; }
+.s-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== สรุปและข้อความ ===== */
+.summary {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  font-size: 0.82rem;
+}
+.summary div { display: grid; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.messages:empty { display: none; }
+.messages { display: grid; gap: 6px; }
+.msg {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--line);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.msg.error { border-color: var(--accent); color: var(--accent); }
+.msg.warn { border-color: var(--warn); color: var(--warn); }
+
+/* ===== ปุ่ม ===== */
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.actions .wide { grid-column: 1 / -1; }
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.small { font-size: 0.8rem; padding: 4px 10px; }
+.btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.fit-btn {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: 16px;
+  z-index: 2;
+  background: var(--panel);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 0.85rem;
+}
+.links a,
+.inline-link { color: var(--muted); }
+.inline-link { font-size: 0.85rem; justify-self: start; }
+.links a:focus-visible,
+.inline-link:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+/* ===== หน้าวางสะพาน ===== */
+.model-info {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.model-info b { font-weight: 600; }
+.model-info .note { color: var(--muted); }
+
+.placed-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.placed-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.placed-list li.empty { display: block; color: var(--muted); }
+.placed-text { display: grid; min-width: 0; }
+.placed-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.placed-text span { color: var(--muted); font-size: 0.78rem; }
+
+.pin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+}
+.pin-start { background: var(--accent); }
+.pin-end { background: #1d2430; }
+
+/* ===== มือถือ: แผงเป็นแผ่นด้านล่าง ===== */
+@media (max-width: 640px) {
+  .panel.tall {
+    width: auto;
+    max-height: 52dvh;
+  }
+  .builder .panel .sub,
+  .placer .panel .sub { display: none; }
+  .placer .maplibregl-ctrl-bottom-right { bottom: calc(52dvh + 12px); }
+}

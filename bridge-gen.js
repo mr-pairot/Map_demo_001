@@ -1,0 +1,376 @@
+/* =========================================================
+   bridge-gen.js — ตัวสร้างสะพาน (ใช้ร่วมกันทั้งหน้าออกแบบและหน้าแผนที่)
+   หน่วยเป็นเมตร | แกน x = ตามแนวสะพาน, แกน y = ขึ้น, แกน z = ขวางสะพาน
+   จุด origin (0,0,0) = โคนตอม่อตัวแรก (กึ่งกลางเสา ระดับพื้นดิน)
+   ========================================================= */
+import * as THREE from 'three';
+
+export const GENERATOR_ID = 'bpnp-bridge-gen@1';
+
+export const DEFAULTS = Object.freeze({
+  version: 1,
+  name: 'สะพาน 1',
+  pierType: 'A',        // A = ตอม่อเสาเดี่ยว, B = ตอม่อเสาคู่
+  deckType: 'concrete', // concrete = พื้นคอนกรีต (box girder), truss = โครงเหล็ก
+  deckLevel: 12,        // ระดับผิวพื้นสะพานจากพื้นดิน (ม.)
+  deckWidth: 10,        // ความกว้างพื้นสะพาน (ม.)
+  spanLength: 30,       // ความยาวช่วงสะพาน (ม.)
+  spanCount: 3,         // จำนวนช่วง
+  girderDepth: 0,       // ความลึกคาน (ม.) 0 = คำนวณให้อัตโนมัติ
+  tracks: 2,            // จำนวนทางรถไฟบนสะพาน 0 / 1 / 2
+  gauge: 1.0            // ขนาดราง 1.000 หรือ 1.435 ม.
+});
+
+export const LIMITS = Object.freeze({
+  deckLevel: [4, 40],
+  deckWidth: [4, 20],
+  spanLength: [10, 80],
+  spanCount: [1, 30],
+  girderDepth: [0, 6]
+});
+
+export const PRESETS = Object.freeze({
+  spanLength: [20, 25, 30, 40],
+  deckWidth: [6, 8, 10, 12]
+});
+
+const TRACK_SPACING = 4.0; // ระยะศูนย์กลางรางคู่ (ม.)
+const SPAN_GAP = 0.1;      // ช่องว่างรอยต่อระหว่างช่วง (ม.)
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const r1 = (v) => Math.round(v * 10) / 10;
+
+/* ---------- พารามิเตอร์ ---------- */
+export function normalizeParams(input = {}) {
+  const p = { ...DEFAULTS, ...input };
+  p.pierType = p.pierType === 'B' ? 'B' : 'A';
+  p.deckType = p.deckType === 'truss' ? 'truss' : 'concrete';
+  for (const [key, [lo, hi]] of Object.entries(LIMITS)) {
+    const n = Number(p[key]);
+    p[key] = Number.isFinite(n) ? clamp(n, lo, hi) : DEFAULTS[key];
+  }
+  p.spanCount = Math.round(p.spanCount);
+  if (p.girderDepth > 0 && p.girderDepth < 0.8) p.girderDepth = 0.8;
+  p.tracks = [0, 1, 2].includes(Number(p.tracks)) ? Number(p.tracks) : DEFAULTS.tracks;
+  p.gauge = Number(p.gauge) === 1.435 ? 1.435 : 1.0;
+  p.name = String(p.name || DEFAULTS.name).trim().slice(0, 60) || DEFAULTS.name;
+  p.version = 1;
+  return p;
+}
+
+/* ---------- คำนวณขนาดชิ้นส่วนจากพารามิเตอร์ ---------- */
+export function deriveDims(input) {
+  const p = normalizeParams(input);
+  const W = p.deckWidth;
+  const L = p.spanLength;
+  const truss = p.deckType === 'truss';
+
+  // ความลึกโครงสร้างส่วนบน: คอนกรีต ≈ span/18, โครงเหล็ก = ระบบพื้น 1.6 ม.
+  const superDepth = truss ? 1.6 : (p.girderDepth > 0 ? p.girderDepth : r1(clamp(L / 18, 1.2, 4)));
+  const bearing = 0.15; // แผ่นรองคาน
+  const capTopY = p.deckLevel - superDepth - bearing;
+  const trussZ = W / 2 + 0.35; // แนวโครงถักสองข้าง
+
+  let colD, capDepth, capLen, capThick, colSpacing = 0;
+  if (p.pierType === 'A') {
+    colD = r1(clamp(W * 0.2, 1.4, 3));
+    capDepth = r1(clamp(W * 0.18, 1.5, 3));
+    capLen = Math.max(W - 1, colD + 1.5);
+    capThick = r1(colD + 0.8);
+  } else {
+    colD = r1(clamp(W * 0.1, 1.0, 1.8));
+    capDepth = 1.4;
+    colSpacing = r1(Math.max(W * 0.6, 3));
+    capLen = colSpacing + colD + 1.0;
+    capThick = r1(colD + 0.6);
+  }
+  if (truss) capLen = Math.max(capLen, trussZ * 2 + 0.9);
+
+  const columnHeight = capTopY - capDepth;
+  const trussHeight = truss ? r1(Math.max(8, L / 6)) : 0;
+  const trussBottomY = p.deckLevel - superDepth + 0.35;
+
+  const errors = [];
+  const warnings = [];
+  if (columnHeight < 1) {
+    const need = r1(superDepth + bearing + capDepth + 1);
+    errors.push(`ระดับพื้นสะพาน ${p.deckLevel} ม. ต่ำเกินไป ต้องสูงอย่างน้อย ${need} ม. เพื่อให้มีที่สำหรับคาน ${superDepth} ม. และคานหัวเสา ${capDepth} ม.`);
+  }
+  const needW = p.tracks === 2 ? 8 : p.tracks === 1 ? 4 : 0;
+  if (W < needW) warnings.push(`พื้นกว้าง ${W} ม. แคบเกินไปสำหรับ ${p.tracks} ทาง ควรกว้างอย่างน้อย ${needW} ม.`);
+  if (p.pierType === 'A' && W > 14) warnings.push('พื้นกว้างเกิน 14 ม. คานหัวเสาแบบเสาเดี่ยวจะยื่นยาวมาก แนะนำ Type B');
+  if (!truss && L > 45 && p.girderDepth === 0) warnings.push('span ยาวเกิน 45 ม. สำหรับคานคอนกรีต ลองพิจารณาโครงเหล็ก');
+
+  return {
+    params: p, W, L, truss,
+    superDepth, bearing, capTopY,
+    colD, capDepth, capLen, capThick, colSpacing,
+    columnHeight, trussHeight, trussZ, trussBottomY,
+    totalLength: L * p.spanCount,
+    pierCount: p.spanCount + 1,
+    trackCenters: p.tracks === 2 ? [-TRACK_SPACING / 2, TRACK_SPACING / 2] : p.tracks === 1 ? [0] : [],
+    errors, warnings
+  };
+}
+
+/* ---------- วัสดุ (ใช้ร่วมกัน ไม่ dispose) ---------- */
+export const MATERIALS = {
+  deck:    new THREE.MeshStandardMaterial({ name: 'concrete-deck', color: 0xcac6bd, roughness: 0.92 }),
+  pier:    new THREE.MeshStandardMaterial({ name: 'concrete-pier', color: 0xb5afa4, roughness: 0.95 }),
+  steel:   new THREE.MeshStandardMaterial({ name: 'steel', color: 0x6d8294, roughness: 0.55, metalness: 0.35 }),
+  rail:    new THREE.MeshStandardMaterial({ name: 'rail', color: 0x4a4e55, roughness: 0.4, metalness: 0.6 }),
+  ballast: new THREE.MeshStandardMaterial({ name: 'ballast', color: 0x8e867b, roughness: 1 }),
+  pad:     new THREE.MeshStandardMaterial({ name: 'bearing', color: 0x3b3d40, roughness: 0.8 })
+};
+
+const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+UNIT_BOX.userData.shared = true;
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+
+function box(sx, sy, sz, mat, name) {
+  const m = new THREE.Mesh(UNIT_BOX, mat);
+  m.scale.set(sx, sy, sz);
+  if (name) m.name = name;
+  return m;
+}
+
+// ชิ้นส่วนเหลี่ยมระหว่างจุด a กับ b (สำหรับโครงถัก)
+function member(a, b, size, mat, name) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  const m = box(len, size, size, mat, name);
+  m.position.addVectors(a, b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(X_AXIS, dir.normalize());
+  return m;
+}
+
+/* ---------- ชิ้นส่วนที่ใช้ซ้ำในสะพานเดียว ---------- */
+function makeKit(d) {
+  const kit = {};
+  kit.colGeo = new THREE.CylinderGeometry(d.colD / 2, (d.colD / 2) * 1.06, d.columnHeight, 28);
+
+  if (d.params.pierType === 'A') {
+    // คานหัวเสาทรงค้อน (hammerhead): ด้านล่างสอบเข้าหาเสา
+    const top = d.capLen / 2;
+    const bot = d.colD / 2 + 0.3;
+    const s = new THREE.Shape();
+    s.moveTo(-bot, 0);
+    s.lineTo(bot, 0);
+    s.lineTo(top, d.capDepth * 0.45);
+    s.lineTo(top, d.capDepth);
+    s.lineTo(-top, d.capDepth);
+    s.lineTo(-top, d.capDepth * 0.45);
+    s.closePath();
+    kit.capGeo = new THREE.ExtrudeGeometry(s, { depth: d.capThick, bevelEnabled: false });
+    kit.capGeo.translate(0, 0, -d.capThick / 2);
+    kit.capGeo.rotateY(Math.PI / 2);
+  }
+
+  if (!d.truss) {
+    // หน้าตัดคานกล่อง (box girder) พร้อมปีกยื่นสองข้าง
+    const W = d.W;
+    const dep = d.superDepth;
+    const bt = (W * 0.55) / 2;
+    const bb = (W * 0.42) / 2;
+    const s = new THREE.Shape();
+    s.moveTo(-W / 2, 0);
+    s.lineTo(W / 2, 0);
+    s.lineTo(W / 2, -0.25);
+    s.lineTo(bt, -0.45);
+    s.lineTo(bb, -dep);
+    s.lineTo(-bb, -dep);
+    s.lineTo(-bt, -0.45);
+    s.lineTo(-W / 2, -0.25);
+    s.closePath();
+    kit.girderGeo = new THREE.ExtrudeGeometry(s, { depth: d.L - SPAN_GAP, bevelEnabled: false });
+    kit.girderGeo.rotateY(Math.PI / 2);
+    kit.padZ = [-bb * 0.7, bb * 0.7];
+  } else {
+    kit.padZ = [-d.trussZ, d.trussZ];
+  }
+  return kit;
+}
+
+/* ---------- ตอม่อ ---------- */
+function buildPier(d, kit) {
+  const g = new THREE.Group();
+  const H = d.columnHeight;
+
+  if (d.params.pierType === 'A') {
+    const col = new THREE.Mesh(kit.colGeo, MATERIALS.pier);
+    col.name = 'column';
+    col.position.y = H / 2;
+    const cap = new THREE.Mesh(kit.capGeo, MATERIALS.pier);
+    cap.name = 'pier-cap';
+    cap.position.y = H;
+    g.add(col, cap);
+  } else {
+    for (const z of [-d.colSpacing / 2, d.colSpacing / 2]) {
+      const col = new THREE.Mesh(kit.colGeo, MATERIALS.pier);
+      col.name = z < 0 ? 'column-left' : 'column-right';
+      col.position.set(0, H / 2, z);
+      g.add(col);
+    }
+    const cap = box(d.capThick, d.capDepth, d.capLen, MATERIALS.pier, 'cross-beam');
+    cap.position.y = H + d.capDepth / 2;
+    g.add(cap);
+  }
+
+  for (const z of kit.padZ) {
+    const pad = box(0.9, d.bearing, 0.9, MATERIALS.pad, 'bearing');
+    pad.position.set(0, d.capTopY + d.bearing / 2, z);
+    g.add(pad);
+  }
+  return g;
+}
+
+/* ---------- ทางรถไฟบนพื้นสะพาน ---------- */
+function addTracks(g, d, x0, len) {
+  const y = d.params.deckLevel;
+  const half = d.params.gauge / 2 + 0.035;
+  for (const zc of d.trackCenters) {
+    const ballast = box(len, 0.3, 3.0, MATERIALS.ballast, 'ballast');
+    ballast.position.set(x0 + len / 2, y + 0.15, zc);
+    g.add(ballast);
+    for (const side of [-half, half]) {
+      const rail = box(len, 0.16, 0.07, MATERIALS.rail, 'rail');
+      rail.position.set(x0 + len / 2, y + 0.38, zc + side);
+      g.add(rail);
+    }
+  }
+}
+
+/* ---------- ช่วงสะพานคอนกรีต ---------- */
+function buildConcreteSpan(d, kit) {
+  const g = new THREE.Group();
+  const x0 = SPAN_GAP / 2;
+  const len = d.L - SPAN_GAP;
+  const y = d.params.deckLevel;
+
+  const girder = new THREE.Mesh(kit.girderGeo, MATERIALS.deck);
+  girder.name = 'box-girder';
+  girder.position.set(x0, y, 0);
+  g.add(girder);
+
+  for (const z of [-(d.W / 2 - 0.1), d.W / 2 - 0.1]) {
+    const wall = box(len, 1.0, 0.2, MATERIALS.deck, 'parapet');
+    wall.position.set(x0 + len / 2, y + 0.5, z);
+    g.add(wall);
+  }
+  addTracks(g, d, x0, len);
+  return g;
+}
+
+/* ---------- ช่วงสะพานโครงเหล็ก (Warren truss แบบทางรถวิ่งด้านล่าง) ---------- */
+function buildTrussSpan(d) {
+  const g = new THREE.Group();
+  const x0 = SPAN_GAP / 2;
+  const len = d.L - SPAN_GAP;
+  const y = d.params.deckLevel;
+  const yb = d.trussBottomY;
+  const yt = yb + d.trussHeight;
+  const zt = d.trussZ;
+  const n = Math.max(2, Math.round(len / 5.5));
+  const p = len / n;
+  const V = (x, yy, z) => new THREE.Vector3(x, yy, z);
+
+  const slab = box(len, 0.35, zt * 2, MATERIALS.deck, 'deck-slab');
+  slab.position.set(x0 + len / 2, y - 0.175, 0);
+  g.add(slab);
+
+  const fbH = (y - 0.35) - (yb - 0.35);
+  for (let i = 0; i <= n; i++) {
+    const fb = box(0.4, fbH, zt * 2, MATERIALS.steel, 'floor-beam');
+    fb.position.set(x0 + i * p, (y - 0.35 + yb - 0.35) / 2, 0);
+    g.add(fb);
+  }
+
+  for (const z of [-zt, zt]) {
+    const side = z < 0 ? 'L' : 'R';
+    g.add(member(V(x0, yb, z), V(x0 + len, yb, z), 0.7, MATERIALS.steel, `bottom-chord-${side}`));
+    g.add(member(V(x0 + 0.5 * p, yt, z), V(x0 + len - 0.5 * p, yt, z), 0.7, MATERIALS.steel, `top-chord-${side}`));
+    for (let i = 0; i < n; i++) {
+      const xb0 = x0 + i * p;
+      const xt = x0 + (i + 0.5) * p;
+      const xb1 = x0 + (i + 1) * p;
+      g.add(member(V(xb0, yb, z), V(xt, yt, z), 0.45, MATERIALS.steel, 'diagonal'));
+      g.add(member(V(xt, yt, z), V(xb1, yb, z), 0.45, MATERIALS.steel, 'diagonal'));
+      g.add(member(V(xt, yb, z), V(xt, yt, z), 0.3, MATERIALS.steel, 'vertical'));
+    }
+  }
+
+  // คานขวางด้านบนและค้ำยันทแยง
+  for (let i = 0; i < n; i++) {
+    const xt = x0 + (i + 0.5) * p;
+    g.add(member(V(xt, yt, -zt), V(xt, yt, zt), 0.35, MATERIALS.steel, 'top-strut'));
+    if (i < n - 1) {
+      const xn = xt + p;
+      g.add(member(V(xt, yt, -zt), V(xn, yt, zt), 0.2, MATERIALS.steel, 'top-bracing'));
+      g.add(member(V(xt, yt, zt), V(xn, yt, -zt), 0.2, MATERIALS.steel, 'top-bracing'));
+    }
+  }
+
+  addTracks(g, d, x0, len);
+  return g;
+}
+
+/* ---------- สร้างสะพานทั้งชุด ---------- */
+export function buildBridge(input) {
+  const d = deriveDims(input);
+  const p = d.params;
+  const root = new THREE.Group();
+  root.name = p.name;
+  root.userData = {
+    generator: GENERATOR_ID,
+    bridgeParams: { ...p },
+    totalLength: d.totalLength,
+    axes: 'x=along bridge, y=up, z=across; origin=base of first pier; unit=m'
+  };
+  if (d.errors.length) {
+    root.userData.errors = d.errors;
+    return root;
+  }
+
+  const kit = makeKit(d);
+  const piers = new THREE.Group();
+  piers.name = 'piers';
+  for (let i = 0; i < d.pierCount; i++) {
+    const pier = buildPier(d, kit);
+    pier.name = `pier-${i + 1}`;
+    pier.position.x = i * d.L;
+    piers.add(pier);
+  }
+
+  const spans = new THREE.Group();
+  spans.name = 'spans';
+  for (let i = 0; i < p.spanCount; i++) {
+    const span = d.truss ? buildTrussSpan(d) : buildConcreteSpan(d, kit);
+    span.name = `span-${i + 1}`;
+    span.position.x = i * d.L;
+    spans.add(span);
+  }
+
+  root.add(piers, spans);
+  return root;
+}
+
+// คืนหน่วยความจำ GPU ของสะพานที่สร้างจาก buildBridge (ไม่ยุ่งกับชิ้นที่ใช้ร่วม)
+export function disposeBridge(obj) {
+  if (!obj) return;
+  const seen = new Set();
+  obj.traverse((o) => {
+    if (o.isMesh && o.geometry && !o.geometry.userData.shared && !seen.has(o.geometry)) {
+      seen.add(o.geometry);
+      o.geometry.dispose();
+    }
+  });
+}
+
+// หาพารามิเตอร์ที่ฝังไว้ในโมเดล (เช่นจากไฟล์ .glb ที่ export จากหน้าออกแบบ)
+export function findBridgeParams(obj) {
+  let found = null;
+  obj.traverse((o) => {
+    if (!found && o.userData && o.userData.bridgeParams) found = o.userData.bridgeParams;
+  });
+  return found ? normalizeParams(found) : null;
+}
