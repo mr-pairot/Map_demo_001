@@ -365,7 +365,8 @@ const modelInfo = $('model-info');
 const DECK_TH = { concrete: 'พื้นคอนกรีต', truss: 'โครงเหล็ก' };
 
 function describeParams(p) {
-  return `Type ${p.pierType} ${DECK_TH[p.deckType]}, กว้าง ${f1(p.deckWidth)} ม., span ${f1(p.spanLength)} ม. × ${p.spanCount}, สูง ${f1(p.deckLevel)} ม.`;
+  const portal = p.pierType === 'C' ? ` (เสาห่าง ${f1(p.portalSpan)} ม.)` : '';
+  return `Type ${p.pierType}${portal} ${DECK_TH[p.deckType]}, กว้าง ${f1(p.deckWidth)} ม., span ${f1(p.spanLength)} ม. × ${p.spanCount}, สูง ${f1(p.deckLevel)} ม.`;
 }
 
 function renderModelInfo(note = '') {

@@ -61,8 +61,22 @@
             </svg>
             <span><b>Type B</b> เสาคู่</span>
           </label>
+          <label class="type-card">
+            <input type="radio" name="pierType" value="C">
+            <svg viewBox="0 0 48 40" aria-hidden="true">
+              <path d="M2 6h44v8h-4l-4 4v20h-5V14H11v24H6V18l-4-4z" />
+            </svg>
+            <span><b>Type C</b> พอร์ทัล</span>
+          </label>
         </div>
       </fieldset>
+
+      <div class="field" id="portal-field" hidden>
+        <label for="in-portal">ระยะห่างเสา Type C (ม.)</label>
+        <input id="in-portal" name="portalSpan" type="number" min="6" max="40" step="0.5" inputmode="decimal" aria-describedby="hint-portal">
+        <small id="hint-portal">วัดศูนย์กลางเสาถึงศูนย์กลางเสา ตั้งให้กว้างพอคร่อมถนนหรือทางด้านล่าง</small>
+        <div class="chips" data-for="portalSpan" role="group" aria-label="ค่าระยะห่างเสาที่ใช้บ่อย"></div>
+      </div>
 
       <fieldset class="group">
         <legend>พื้นสะพาน</legend>

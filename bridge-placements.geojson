@@ -1,0 +1,76 @@
+{
+  "type": "FeatureCollection",
+  "name": "bridge-placements",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            100.5405,
+            13.804
+          ],
+          [
+            100.54073151684742,
+            13.80361058253429
+          ]
+        ]
+      },
+      "properties": {
+        "name": "สะพาน 1",
+        "model": "params",
+        "bearing": 150,
+        "length": 50,
+        "params": {
+          "version": 1,
+          "name": "สะพาน 1",
+          "pierType": "A",
+          "deckType": "truss",
+          "deckLevel": 12,
+          "deckWidth": 8,
+          "spanLength": 50,
+          "spanCount": 1,
+          "girderDepth": 0,
+          "tracks": 2,
+          "gauge": 1
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            100.54021448793071,
+            13.803659456531747
+          ],
+          [
+            100.54007032762189,
+            13.803232144580335
+          ]
+        ]
+      },
+      "properties": {
+        "name": "สะพาน 1",
+        "model": "params",
+        "bearing": 198.14,
+        "length": 50,
+        "params": {
+          "version": 1,
+          "name": "สะพาน 1",
+          "pierType": "A",
+          "deckType": "truss",
+          "deckLevel": 12,
+          "deckWidth": 8,
+          "spanLength": 50,
+          "spanCount": 1,
+          "girderDepth": 0,
+          "tracks": 2,
+          "gauge": 1
+        }
+      }
+    }
+  ]
+}

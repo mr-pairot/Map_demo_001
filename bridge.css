@@ -122,7 +122,7 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 /* ===== การ์ดเลือกชนิดตอม่อ ===== */
 .type-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -136,7 +136,8 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
   border-radius: 10px;
   background: var(--field-bg);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
   text-align: center;
 }
 
@@ -147,7 +148,7 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 }
 
 .type-card svg {
-  width: 56px;
+  width: 52px;
   height: 46px;
   fill: var(--sec-concrete);
   stroke: var(--ink);

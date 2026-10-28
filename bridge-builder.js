@@ -173,6 +173,10 @@ function sectionSvg(d) {
       out.push(rect(z - d.colD / 2, 0, z + d.colD / 2, H, 's-concrete'));
     }
     out.push(rect(-d.capLen / 2, H, d.capLen / 2, H + cd, 's-concrete'));
+    if (p.pierType === 'C' && d.haunch > 0) {
+      const zi = d.colSpacing / 2 - d.colD / 2;
+      for (const s of [-1, 1]) out.push(poly([[s * zi, H], [s * (zi - d.haunch), H], [s * zi, H - d.haunch]], 's-concrete'));
+    }
   }
 
   // แผ่นรองคาน
@@ -217,6 +221,14 @@ function sectionSvg(d) {
   const colLabelY = Number(Y(H / 2)) + 4;
   if (p.pierType === 'A') {
     out.push(`<text class="s-label" x="${Number(X(d.colD / 2)) + 6}" y="${colLabelY}">เสา ${f1(H)} ม.</text>`);
+  } else if (p.pierType === 'C') {
+    // ช่องลอดใต้คานพอร์ทัล
+    const zi = d.clearWidth / 2;
+    const yy = Number(Y(H * 0.3));
+    out.push(`<line class="s-dim" x1="${X(-zi)}" y1="${yy}" x2="${X(zi)}" y2="${yy}"/>`);
+    for (const z of [-zi, zi]) out.push(`<line class="s-dim" x1="${X(z)}" y1="${yy - 4}" x2="${X(z)}" y2="${yy + 4}"/>`);
+    out.push(`<text class="s-label" x="${cx}" y="${yy - 6}" text-anchor="middle">ช่องลอด ${f1(d.clearWidth)} ม.</text>`);
+    out.push(`<text class="s-label" x="${cx}" y="${colLabelY - 14}" text-anchor="middle">เสา ${f1(H)} ม.</text>`);
   } else {
     out.push(`<text class="s-label" x="${cx}" y="${colLabelY}" text-anchor="middle">เสา ${f1(H)} ม.</text>`);
   }
@@ -238,10 +250,13 @@ function renderSummary(d) {
   ];
   if (!d.errors.length) {
     rows.push(['ความสูงเสา', `${f1(d.columnHeight)} ม.`]);
-    rows.push(p.pierType === 'A'
-      ? ['เสา', `Ø ${f1(d.colD)} ม.`]
-      : ['เสาคู่', `Ø ${f1(d.colD)} ม. ห่าง ${f1(d.colSpacing)} ม.`]);
-    rows.push(['คานหัวเสา', `ยาว ${f1(d.capLen)} ลึก ${f1(d.capDepth)} ม.`]);
+    if (p.pierType === 'A') rows.push(['เสา', `Ø ${f1(d.colD)} ม.`]);
+    else if (p.pierType === 'B') rows.push(['เสาคู่', `Ø ${f1(d.colD)} ม. ห่าง ${f1(d.colSpacing)} ม.`]);
+    else {
+      rows.push(['เสาพอร์ทัล', `${f1(d.colD)} × ${f1(d.colD)} ม. ห่าง ${f1(d.colSpacing)} ม.`]);
+      rows.push(['ช่องลอดใต้', `กว้าง ${f1(d.clearWidth)} สูง ${f1(d.columnHeight - d.haunch)} ม.`]);
+    }
+    rows.push([p.pierType === 'C' ? 'คานพอร์ทัล' : 'คานหัวเสา', `ยาว ${f1(d.capLen)} ลึก ${f1(d.capDepth)} ม.`]);
     rows.push(d.truss
       ? ['โครงถัก', `สูง ${f1(d.trussHeight)} ม.`]
       : ['ความลึกคาน', `${f1(d.superDepth)} ม.${p.girderDepth > 0 ? '' : ' (คำนวณให้)'}`]);
@@ -271,6 +286,7 @@ function update({ fit = false, note = '' } = {}) {
   renderSummary(d);
   renderMessages(d, note);
   syncChips(p);
+  $('portal-field').hidden = p.pierType !== 'C';
 
   const ok = d.errors.length === 0;
   btnGlb.disabled = !ok;
