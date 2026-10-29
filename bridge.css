@@ -122,7 +122,7 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 /* ===== การ์ดเลือกชนิดตอม่อ ===== */
 .type-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
@@ -148,7 +148,7 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 }
 
 .type-card svg {
-  width: 52px;
+  width: 48px;
   height: 46px;
   fill: var(--sec-concrete);
   stroke: var(--ink);
@@ -163,6 +163,17 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 }
 .type-card:has(input:checked) svg { stroke: var(--accent); }
 .type-card:has(input:focus-visible) { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+/* ===== ช่องกรอกเฉพาะชนิดตอม่อ ===== */
+.type-fields {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+.s-edge { stroke: var(--muted); stroke-width: 0.8; stroke-dasharray: 3 2; }
 
 /* ===== ปุ่มสลับสองทาง ===== */
 .segmented {

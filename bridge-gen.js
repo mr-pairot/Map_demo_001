@@ -10,7 +10,7 @@ export const GENERATOR_ID = 'bpnp-bridge-gen@1';
 export const DEFAULTS = Object.freeze({
   version: 1,
   name: 'สะพาน 1',
-  pierType: 'A',        // A = ตอม่อเสาเดี่ยว, B = ตอม่อเสาคู่, C = ตอม่อพอร์ทัล (คร่อมถนน/ทางด้านล่าง)
+  pierType: 'A',        // A = เสาเดี่ยวผายบน, B = เสาคู่, C = พอร์ทัล (คร่อมถนน/ทางด้านล่าง), D = ผนังทึบ
   deckType: 'concrete', // concrete = พื้นคอนกรีต (box girder), truss = โครงเหล็ก
   deckLevel: 12,        // ระดับผิวพื้นสะพานจากพื้นดิน (ม.)
   deckWidth: 10,        // ความกว้างพื้นสะพาน (ม.)
@@ -18,6 +18,13 @@ export const DEFAULTS = Object.freeze({
   spanCount: 3,         // จำนวนช่วง
   girderDepth: 0,       // ความลึกคาน (ม.) 0 = คำนวณให้อัตโนมัติ
   portalSpan: 16,       // ระยะห่างศูนย์กลางเสา Type C (ม.)
+  aTopMode: 'direct',   // Type A: direct = เสาผายรับคานโดยตรง, cap = เสาผาย + คานหัวเสา
+  aBaseWidth: 0,        // Type A: ขนาดเสาโคน ขวางสะพาน (ม.) 0 = คำนวณให้
+  aThick: 0,            // Type A: ความหนาเสา ตามแนวสะพาน (ม.) 0 = เท่าขนาดโคน
+  aTopWidth: 0,         // Type A: ขนาดเสาด้านบน ขวางสะพาน (ม.) 0 = คำนวณให้
+  aFlareDepth: 1.2,     // Type A: ความลึกช่วงผายจากยอดเสา (ม.)
+  dThick: 1.2,          // Type D: ความหนาผนัง ตามแนวสะพาน (ม.)
+  dRadius: 0.6,         // Type D: รัศมีขอบโค้งริมผนัง (ม.)
   tracks: 2,            // จำนวนทางรถไฟบนสะพาน 0 / 1 / 2
   gauge: 1.0            // ขนาดราง 1.000 หรือ 1.435 ม.
 });
@@ -28,7 +35,13 @@ export const LIMITS = Object.freeze({
   spanLength: [10, 80],
   spanCount: [1, 30],
   girderDepth: [0, 6],
-  portalSpan: [6, 40]
+  portalSpan: [6, 40],
+  aBaseWidth: [0, 4],
+  aThick: [0, 4],
+  aTopWidth: [0, 16],
+  aFlareDepth: [0.5, 3],
+  dThick: [1, 1.5],
+  dRadius: [0.5, 0.75]
 });
 
 export const PRESETS = Object.freeze({
@@ -46,7 +59,11 @@ const r1 = (v) => Math.round(v * 10) / 10;
 /* ---------- พารามิเตอร์ ---------- */
 export function normalizeParams(input = {}) {
   const p = { ...DEFAULTS, ...input };
-  p.pierType = ['A', 'B', 'C'].includes(p.pierType) ? p.pierType : 'A';
+  p.pierType = ['A', 'B', 'C', 'D'].includes(p.pierType) ? p.pierType : 'A';
+  p.aTopMode = p.aTopMode === 'cap' ? 'cap' : 'direct';
+  for (const key of ['aBaseWidth', 'aThick', 'aTopWidth']) {
+    if (p[key] > 0 && p[key] < 1) p[key] = 1; // ค่าเล็กกว่า 1 ม. ที่ไม่ใช่ 0 (อัตโนมัติ) ปัดเป็น 1 ม.
+  }
   p.deckType = p.deckType === 'truss' ? 'truss' : 'concrete';
   for (const [key, [lo, hi]] of Object.entries(LIMITS)) {
     const n = Number(p[key]);
@@ -74,19 +91,49 @@ export function deriveDims(input) {
   const capTopY = p.deckLevel - superDepth - bearing;
   const trussZ = W / 2 + 0.35; // แนวโครงถักสองข้าง
 
-  let colD, capDepth, capLen, capThick, colSpacing = 0, haunch = 0;
+  // แผ่นรองคาน: ใต้คานกล่องคอนกรีต หรือใต้แนวโครงถัก
+  const padHalf = truss ? trussZ : W * 0.21 * 0.7;
+  const padZ = [-padHalf, padHalf];
+  const padNeed = r1(padHalf * 2 + 0.9); // ความกว้างหัวเสาขั้นต่ำที่วางแผ่นรองได้
+
+  const errors = [];
+  const warnings = [];
+  let colD, capDepth = 0, capLen, capThick, colSpacing = 0, haunch = 0, hasCap = true;
+  let aBase = 0, aThick = 0, aTop = 0, flareDepth = 0, flareLip = 0;
+  let wallWidth = 0, wallRadius = 0;
+
   if (p.pierType === 'A') {
-    colD = r1(clamp(W * 0.2, 1.4, 3));
-    capDepth = r1(clamp(W * 0.18, 1.5, 3));
-    capLen = Math.max(W - 1, colD + 1.5);
-    capThick = r1(colD + 0.8);
+    // Type A: เสาเหลี่ยมมุมมน ขนาดคงที่จากโคน แล้วผายออกด้านขวางสะพานในช่วงบนสุด
+    hasCap = p.aTopMode === 'cap';
+    aBase = p.aBaseWidth > 0 ? p.aBaseWidth : r1(clamp(W * 0.2, 1.4, 3));
+    aThick = p.aThick > 0 ? p.aThick : aBase;
+    const autoTop = hasCap ? aBase + 1.0 : Math.max(aBase + 1.0, truss ? padNeed : r1(W * 0.42));
+    aTop = p.aTopWidth > 0 ? p.aTopWidth : autoTop;
+    if (aTop < aBase) {
+      warnings.push(`ขนาดเสาด้านบน ${aTop} ม. เล็กกว่าขนาดโคน ${aBase} ม. ปรับให้เท่าขนาดโคนแล้ว`);
+      aTop = aBase;
+    }
+    flareDepth = p.aFlareDepth;
+    flareLip = flareDepth > 0.6 ? 0.2 : 0; // ขอบตั้งตรงสั้น ๆ ที่ยอด กันขอบบางเป็นคมมีด
+    colD = aBase;
+    if (hasCap) {
+      capDepth = r1(clamp(W * 0.18, 1.5, 3));
+      capLen = Math.max(W - 1, aTop + 1.0);
+      capThick = r1(aThick + 0.8);
+    } else {
+      capLen = aTop;
+      capThick = aThick;
+      if (aTop < padNeed) warnings.push(`หัวเสากว้าง ${aTop} ม. ไม่พอวางแผ่นรองคาน ควรกว้างอย่างน้อย ${padNeed} ม.`);
+      if (!truss && aTop > W) warnings.push(`หัวเสากว้าง ${aTop} ม. เกินความกว้างพื้นสะพาน ${W} ม.`);
+      if (truss && aTop > W) warnings.push(`พื้นโครงเหล็กต้องให้หัวเสากว้างถึงแนวโครงถัก (${aTop} ม. กว้างกว่าพื้น) แนะนำแบบมีคานหัวเสา`);
+    }
   } else if (p.pierType === 'B') {
     colD = r1(clamp(W * 0.1, 1.0, 1.8));
     capDepth = 1.4;
     colSpacing = r1(Math.max(W * 0.6, 3));
     capLen = colSpacing + colD + 1.0;
     capThick = r1(colD + 0.6);
-  } else {
+  } else if (p.pierType === 'C') {
     // Type C พอร์ทัล: เสาเหลี่ยมสองต้นห่างกันตามช่องลอดที่ต้องการ คานขวางลึกตามระยะห่างเสา
     colSpacing = p.portalSpan;
     colD = r1(clamp(W * 0.12, 1.2, 2.0));
@@ -94,30 +141,49 @@ export function deriveDims(input) {
     capLen = colSpacing + colD + 0.6;
     capThick = r1(colD + 0.4);
     haunch = r1(Math.min(1.5, colSpacing * 0.1));
+  } else {
+    // Type D ผนังทึบ: กว้างริมถึงริมแคบกว่าพื้นข้างละ 0.5 ม. ขอบริมโค้ง
+    hasCap = false;
+    wallWidth = r1(Math.max(W - 1.0, 2));
+    wallRadius = p.dRadius;
+    if (wallRadius > p.dThick / 2) {
+      wallRadius = p.dThick / 2;
+      warnings.push(`รัศมีขอบ ${p.dRadius} ม. เกินครึ่งความหนาผนัง ใช้ ${wallRadius} ม. แทน (ปลายผนังโค้งครึ่งวงกลม)`);
+    }
+    colD = p.dThick;
+    capLen = wallWidth;
+    capThick = p.dThick;
+    if (truss && padHalf + 0.45 > wallWidth / 2) {
+      warnings.push(`โครงถักอยู่นอกแนวผนัง แผ่นรองคานยื่นพ้นขอบผนังข้างละ ${r1(padHalf + 0.45 - wallWidth / 2)} ม.`);
+    }
   }
-  if (truss) capLen = Math.max(capLen, trussZ * 2 + 0.9);
+  if (truss && hasCap) capLen = Math.max(capLen, trussZ * 2 + 0.9);
 
   const columnHeight = capTopY - capDepth;
   const trussHeight = truss ? r1(Math.max(8, L / 6)) : 0;
   const trussBottomY = p.deckLevel - superDepth + 0.35;
 
-  const errors = [];
-  const warnings = [];
-  if (columnHeight < 1) {
-    const need = r1(superDepth + bearing + capDepth + 1);
-    errors.push(`ระดับพื้นสะพาน ${p.deckLevel} ม. ต่ำเกินไป ต้องสูงอย่างน้อย ${need} ม. เพื่อให้มีที่สำหรับคาน ${superDepth} ม. และคานหัวเสา ${capDepth} ม.`);
+  const minCol = p.pierType === 'A' ? flareDepth + 0.5 : 1;
+  if (columnHeight < minCol) {
+    const need = r1(superDepth + bearing + capDepth + minCol);
+    const parts = [`คาน ${superDepth} ม.`];
+    if (capDepth > 0) parts.push(`คานหัวเสา ${capDepth} ม.`);
+    if (p.pierType === 'A') parts.push(`ช่วงผาย ${flareDepth} ม.`);
+    errors.push(`ระดับพื้นสะพาน ${p.deckLevel} ม. ต่ำเกินไป ต้องสูงอย่างน้อย ${need} ม. เพื่อให้มีที่สำหรับ${parts.join(' ')}`);
   }
   const needW = p.tracks === 2 ? 8 : p.tracks === 1 ? 4 : 0;
   if (W < needW) warnings.push(`พื้นกว้าง ${W} ม. แคบเกินไปสำหรับ ${p.tracks} ทาง ควรกว้างอย่างน้อย ${needW} ม.`);
-  if (p.pierType === 'A' && W > 14) warnings.push('พื้นกว้างเกิน 14 ม. คานหัวเสาแบบเสาเดี่ยวจะยื่นยาวมาก แนะนำ Type B');
+  if (p.pierType === 'A' && hasCap && W > 14) warnings.push('พื้นกว้างเกิน 14 ม. คานหัวเสาแบบเสาเดี่ยวจะยื่นยาวมาก แนะนำ Type B');
   if (p.pierType === 'C' && colSpacing < W) warnings.push(`ระยะห่างเสา ${colSpacing} ม. แคบกว่าพื้นสะพาน ถ้าไม่ต้องคร่อมถนนหรือทางด้านล่าง Type B จะเหมาะกว่า`);
   if (p.pierType === 'C' && colSpacing > 30) warnings.push('ระยะห่างเสาเกิน 30 ม. คานขวางคอนกรีตจะลึกมาก ในงานจริงมักใช้คานเหล็กหรือคานอัดแรง');
   if (!truss && L > 45 && p.girderDepth === 0) warnings.push('span ยาวเกิน 45 ม. สำหรับคานคอนกรีต ลองพิจารณาโครงเหล็ก');
 
   return {
     params: p, W, L, truss,
-    superDepth, bearing, capTopY,
-    colD, capDepth, capLen, capThick, colSpacing, haunch,
+    superDepth, bearing, capTopY, padZ, padNeed,
+    colD, capDepth, capLen, capThick, colSpacing, haunch, hasCap,
+    aBase, aThick, aTop, flareDepth, flareLip,
+    wallWidth, wallRadius,
     clearWidth: p.pierType === 'C' ? colSpacing - colD : 0,
     columnHeight, trussHeight, trussZ, trussBottomY,
     totalLength: L * p.spanCount,
@@ -125,6 +191,25 @@ export function deriveDims(input) {
     trackCenters: p.tracks === 2 ? [-TRACK_SPACING / 2, TRACK_SPACING / 2] : p.tracks === 1 ? [0] : [],
     errors, warnings
   };
+}
+
+/* ---------- รูปด้านหน้าเสา Type A: [{ y, a }] a = ครึ่งความกว้างขวางสะพาน ---------- */
+export function pierProfileA(d, steps = 12) {
+  const H = d.columnHeight;
+  const a0 = d.aBase / 2;
+  const a1 = d.aTop / 2;
+  const y0 = H - d.flareDepth;
+  const curve = d.flareDepth - d.flareLip;
+  const levels = [{ y: 0, a: a0 }, { y: y0, a: a0 }];
+  if (a1 > a0 + 1e-6) {
+    // เสี้ยววงรี: เริ่มตั้งฉากต่อจากผิวเสา แล้วโค้งผายออกจนกว้างเท่าขนาดด้านบน
+    for (let i = 1; i <= steps; i++) {
+      const t = (i / steps) * (Math.PI / 2);
+      levels.push({ y: y0 + curve * Math.sin(t), a: a1 - (a1 - a0) * Math.cos(t) });
+    }
+  }
+  levels.push({ y: H, a: a1 });
+  return levels;
 }
 
 /* ---------- วัสดุ (ใช้ร่วมกัน ไม่ dispose) ---------- */
@@ -158,10 +243,68 @@ function member(a, b, size, mat, name) {
   return m;
 }
 
+/* ---------- ทรงตันหน้าตัดสี่เหลี่ยมมุมมน ที่ความกว้างเปลี่ยนตามความสูงได้ ----------
+   levels = [{ y, a }]  a = ครึ่งความกว้างขวางสะพาน (แกน z)
+   b = ครึ่งความหนาตามแนวสะพาน (แกน x), r = รัศมีมุม (ต้องไม่เกิน a และ b) */
+function roundedRectRing(a, b, r, seg) {
+  const pts = [];
+  const corners = [[b - r, a - r], [-(b - r), a - r], [-(b - r), -(a - r)], [b - r, -(a - r)]];
+  corners.forEach(([cx, cz], k) => {
+    for (let i = 0; i <= seg; i++) {
+      const t = (k + i / seg) * (Math.PI / 2);
+      pts.push([cx + r * Math.cos(t), cz + r * Math.sin(t)]);
+    }
+  });
+  return pts;
+}
+
+function loftRoundedRect(levels, b, r, seg = 8) {
+  const pos = [];
+  const idx = [];
+  const n = 4 * (seg + 1);
+  for (const { y, a } of levels) {
+    for (const [x, z] of roundedRectRing(a, b, Math.min(r, a, b), seg)) pos.push(x, y, z);
+  }
+  for (let k = 0; k < levels.length - 1; k++) {
+    for (let i = 0; i < n; i++) {
+      const v0 = k * n + i;
+      const v1 = k * n + ((i + 1) % n);
+      const v2 = v0 + n;
+      const v3 = v1 + n;
+      idx.push(v0, v2, v1, v1, v2, v3);
+    }
+  }
+  // ฝาบนและฝาล่าง (จุดแยกเพื่อให้ผิวเรียบแบน)
+  for (const [lv, up] of [[levels[levels.length - 1], true], [levels[0], false]]) {
+    const base = pos.length / 3;
+    pos.push(0, lv.y, 0);
+    for (const [x, z] of roundedRectRing(lv.a, b, Math.min(r, lv.a, b), seg)) pos.push(x, lv.y, z);
+    for (let i = 0; i < n; i++) {
+      const c = base;
+      const p0 = base + 1 + i;
+      const p1 = base + 1 + ((i + 1) % n);
+      if (up) idx.push(c, p1, p0); else idx.push(c, p0, p1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 /* ---------- ชิ้นส่วนที่ใช้ซ้ำในสะพานเดียว ---------- */
 function makeKit(d) {
   const kit = {};
-  if (d.params.pierType !== 'C') kit.colGeo = new THREE.CylinderGeometry(d.colD / 2, (d.colD / 2) * 1.06, d.columnHeight, 28);
+  const type = d.params.pierType;
+  if (type === 'A') {
+    kit.colGeo = loftRoundedRect(pierProfileA(d), d.aThick / 2, Math.min(0.3, d.aThick / 4, d.aBase / 4));
+  } else if (type === 'B') {
+    kit.colGeo = new THREE.CylinderGeometry(d.colD / 2, (d.colD / 2) * 1.06, d.columnHeight, 28);
+  } else if (type === 'D') {
+    const a = d.wallWidth / 2;
+    kit.colGeo = loftRoundedRect([{ y: 0, a }, { y: d.columnHeight, a }], d.params.dThick / 2, d.wallRadius, 12);
+  }
 
   if (d.params.pierType === 'C' && d.haunch > 0) {
     // ครีบเสริมมุม (haunch) ใต้คานขวางทั้งสองข้าง
@@ -180,10 +323,10 @@ function makeKit(d) {
     kit.haunchGeo.rotateY(Math.PI / 2);
   }
 
-  if (d.params.pierType === 'A') {
-    // คานหัวเสาทรงค้อน (hammerhead): ด้านล่างสอบเข้าหาเสา
+  if (type === 'A' && d.hasCap) {
+    // คานหัวเสาทรงค้อน (hammerhead): ด้านล่างสอบเข้าหาหัวเสาผาย
     const top = d.capLen / 2;
-    const bot = d.colD / 2 + 0.3;
+    const bot = Math.min(d.aTop / 2, top);
     const s = new THREE.Shape();
     s.moveTo(-bot, 0);
     s.lineTo(bot, 0);
@@ -215,10 +358,8 @@ function makeKit(d) {
     s.closePath();
     kit.girderGeo = new THREE.ExtrudeGeometry(s, { depth: d.L - SPAN_GAP, bevelEnabled: false });
     kit.girderGeo.rotateY(Math.PI / 2);
-    kit.padZ = [-bb * 0.7, bb * 0.7];
-  } else {
-    kit.padZ = [-d.trussZ, d.trussZ];
   }
+  kit.padZ = d.padZ;
   return kit;
 }
 
@@ -229,12 +370,18 @@ function buildPier(d, kit) {
 
   if (d.params.pierType === 'A') {
     const col = new THREE.Mesh(kit.colGeo, MATERIALS.pier);
-    col.name = 'column';
-    col.position.y = H / 2;
-    const cap = new THREE.Mesh(kit.capGeo, MATERIALS.pier);
-    cap.name = 'pier-cap';
-    cap.position.y = H;
-    g.add(col, cap);
+    col.name = 'flared-column';
+    g.add(col);
+    if (d.hasCap) {
+      const cap = new THREE.Mesh(kit.capGeo, MATERIALS.pier);
+      cap.name = 'pier-cap';
+      cap.position.y = H;
+      g.add(cap);
+    }
+  } else if (d.params.pierType === 'D') {
+    const wall = new THREE.Mesh(kit.colGeo, MATERIALS.pier);
+    wall.name = 'wall-pier';
+    g.add(wall);
   } else if (d.params.pierType === 'C') {
     for (const z of [-d.colSpacing / 2, d.colSpacing / 2]) {
       const col = box(d.colD, H, d.colD, MATERIALS.pier, z < 0 ? 'column-left' : 'column-right');

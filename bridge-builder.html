@@ -47,10 +47,9 @@
           <label class="type-card">
             <input type="radio" name="pierType" value="A">
             <svg viewBox="0 0 48 40" aria-hidden="true">
-              <path d="M6 6h36v4l-14 7h-8l-14-7z" />
-              <rect x="20" y="17" width="8" height="21" />
+              <path d="M10 4h28v2c-6 0-10 2-11 8v24h-6V14c-1-6-5-8-11-8z" />
             </svg>
-            <span><b>Type A</b> เสาเดี่ยว</span>
+            <span><b>Type A</b> เสาเดี่ยวผายบน</span>
           </label>
           <label class="type-card">
             <input type="radio" name="pierType" value="B">
@@ -68,8 +67,59 @@
             </svg>
             <span><b>Type C</b> พอร์ทัล</span>
           </label>
+          <label class="type-card">
+            <input type="radio" name="pierType" value="D">
+            <svg viewBox="0 0 48 40" aria-hidden="true">
+              <rect x="6" y="6" width="36" height="32" rx="4" />
+            </svg>
+            <span><b>Type D</b> ผนังทึบ</span>
+          </label>
         </div>
       </fieldset>
+
+      <div class="type-fields" id="a-fields" hidden>
+        <div class="segmented" role="radiogroup" aria-label="หัวเสา Type A">
+          <label><input type="radio" name="aTopMode" value="direct"><span>รับคานโดยตรง</span></label>
+          <label><input type="radio" name="aTopMode" value="cap"><span>มีคานหัวเสา</span></label>
+        </div>
+        <div class="grid2">
+          <label class="field">
+            <span>ขนาดเสาโคน (ม.)</span>
+            <input name="aBaseWidth" type="number" min="0" max="4" step="0.1" inputmode="decimal">
+            <small>ขวางสะพาน, 0 = คำนวณให้</small>
+          </label>
+          <label class="field">
+            <span>ความหนาเสา (ม.)</span>
+            <input name="aThick" type="number" min="0" max="4" step="0.1" inputmode="decimal">
+            <small>ตามแนวสะพาน, 0 = เท่าขนาดโคน</small>
+          </label>
+          <label class="field">
+            <span>ขนาดเสาด้านบน (ม.)</span>
+            <input name="aTopWidth" type="number" min="0" max="16" step="0.1" inputmode="decimal">
+            <small>0 = คำนวณให้</small>
+          </label>
+          <label class="field">
+            <span>ความลึกช่วงผาย (ม.)</span>
+            <input name="aFlareDepth" type="number" min="0.5" max="3" step="0.1" inputmode="decimal">
+            <small>วัดลงจากยอดเสา</small>
+          </label>
+        </div>
+      </div>
+
+      <div class="type-fields" id="d-fields" hidden>
+        <div class="grid2">
+          <label class="field">
+            <span>ความหนาผนัง (ม.)</span>
+            <input name="dThick" type="number" min="1" max="1.5" step="0.05" inputmode="decimal">
+            <small>1.00–1.50 ม.</small>
+          </label>
+          <label class="field">
+            <span>รัศมีขอบโค้ง (ม.)</span>
+            <input name="dRadius" type="number" min="0.5" max="0.75" step="0.05" inputmode="decimal">
+            <small>0.50–0.75 ม.</small>
+          </label>
+        </div>
+      </div>
 
       <div class="field" id="portal-field" hidden>
         <label for="in-portal">ระยะห่างเสา Type C (ม.)</label>

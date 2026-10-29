@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import {
-  DEFAULTS, PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge
+  DEFAULTS, PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA
 } from './bridge-gen.js';
 
 export const PARAMS_KEY = 'bpnp.bridge.params';
@@ -165,9 +165,23 @@ function sectionSvg(d) {
 
   // เสาและคานหัวเสา
   if (p.pierType === 'A') {
-    out.push(rect(-d.colD / 2, 0, d.colD / 2, H, 's-concrete'));
-    const top = d.capLen / 2, bot = d.colD / 2 + 0.3;
-    out.push(poly([[-bot, H], [bot, H], [top, H + cd * 0.45], [top, H + cd], [-top, H + cd], [-top, H + cd * 0.45]], 's-concrete'));
+    // รูปด้านหน้าเสาผาย
+    const prof = pierProfileA(d);
+    out.push(poly([...prof.map((l) => [l.a, l.y]), ...prof.slice().reverse().map((l) => [-l.a, l.y])], 's-concrete'));
+    if (d.hasCap) {
+      const top = d.capLen / 2, bot = Math.min(d.aTop / 2, top);
+      out.push(poly([[-bot, H], [bot, H], [top, H + cd * 0.45], [top, H + cd], [-top, H + cd], [-top, H + cd * 0.45]], 's-concrete'));
+    }
+    // แนวเริ่มผาย
+    const yf = Number(Y(H - d.flareDepth));
+    out.push(`<line class="s-edge" x1="${X(-d.aBase / 2 - 0.6)}" y1="${yf}" x2="${X(d.aBase / 2 + 0.6)}" y2="${yf}"/>`);
+  } else if (p.pierType === 'D') {
+    const a = d.wallWidth / 2;
+    out.push(rect(-a, 0, a, H, 's-concrete'));
+    // เส้นบอกแนวขอบโค้งที่ริมผนัง
+    for (const z of [-(a - d.wallRadius), a - d.wallRadius]) {
+      out.push(`<line class="s-edge" x1="${X(z)}" y1="${Y(0)}" x2="${X(z)}" y2="${Y(H)}"/>`);
+    }
   } else {
     for (const z of [-d.colSpacing / 2, d.colSpacing / 2]) {
       out.push(rect(z - d.colD / 2, 0, z + d.colD / 2, H, 's-concrete'));
@@ -180,8 +194,7 @@ function sectionSvg(d) {
   }
 
   // แผ่นรองคาน
-  const padZ = d.truss ? [-d.trussZ, d.trussZ] : [-(d.W * 0.21) * 0.7, (d.W * 0.21) * 0.7];
-  for (const z of padZ) out.push(rect(z - 0.45, d.capTopY, z + 0.45, d.capTopY + d.bearing, 's-pad'));
+  for (const z of d.padZ) out.push(rect(z - 0.45, d.capTopY, z + 0.45, d.capTopY + d.bearing, 's-pad'));
 
   // โครงสร้างส่วนบน
   const y = p.deckLevel;
@@ -220,7 +233,9 @@ function sectionSvg(d) {
   // ความสูงเสา
   const colLabelY = Number(Y(H / 2)) + 4;
   if (p.pierType === 'A') {
-    out.push(`<text class="s-label" x="${Number(X(d.colD / 2)) + 6}" y="${colLabelY}">เสา ${f1(H)} ม.</text>`);
+    out.push(`<text class="s-label" x="${Number(X(d.aBase / 2)) + 6}" y="${colLabelY}">เสา ${f1(H)} ม.</text>`);
+  } else if (p.pierType === 'D') {
+    out.push(`<text class="s-label" x="${cx}" y="${colLabelY}" text-anchor="middle">ผนัง ${f1(H)} ม.</text>`);
   } else if (p.pierType === 'C') {
     // ช่องลอดใต้คานพอร์ทัล
     const zi = d.clearWidth / 2;
@@ -250,13 +265,19 @@ function renderSummary(d) {
   ];
   if (!d.errors.length) {
     rows.push(['ความสูงเสา', `${f1(d.columnHeight)} ม.`]);
-    if (p.pierType === 'A') rows.push(['เสา', `Ø ${f1(d.colD)} ม.`]);
+    if (p.pierType === 'A') {
+      rows.push(['เสาโคน', `${f1(d.aBase)} × ${f1(d.aThick)} ม.`]);
+      rows.push(['หัวเสาผาย', `กว้าง ${f1(d.aTop)} ม. ลึก ${f1(d.flareDepth)} ม.`]);
+    } else if (p.pierType === 'D') {
+      rows.push(['ผนัง', `กว้าง ${f1(d.wallWidth)} หนา ${f1(p.dThick)} ม.`]);
+      rows.push(['ขอบโค้ง', `R ${d.wallRadius.toFixed(2)} ม.`]);
+    }
     else if (p.pierType === 'B') rows.push(['เสาคู่', `Ø ${f1(d.colD)} ม. ห่าง ${f1(d.colSpacing)} ม.`]);
     else {
       rows.push(['เสาพอร์ทัล', `${f1(d.colD)} × ${f1(d.colD)} ม. ห่าง ${f1(d.colSpacing)} ม.`]);
       rows.push(['ช่องลอดใต้', `กว้าง ${f1(d.clearWidth)} สูง ${f1(d.columnHeight - d.haunch)} ม.`]);
     }
-    rows.push([p.pierType === 'C' ? 'คานพอร์ทัล' : 'คานหัวเสา', `ยาว ${f1(d.capLen)} ลึก ${f1(d.capDepth)} ม.`]);
+    if (d.hasCap) rows.push([p.pierType === 'C' ? 'คานพอร์ทัล' : 'คานหัวเสา', `ยาว ${f1(d.capLen)} ลึก ${f1(d.capDepth)} ม.`]);
     rows.push(d.truss
       ? ['โครงถัก', `สูง ${f1(d.trussHeight)} ม.`]
       : ['ความลึกคาน', `${f1(d.superDepth)} ม.${p.girderDepth > 0 ? '' : ' (คำนวณให้)'}`]);
@@ -287,6 +308,8 @@ function update({ fit = false, note = '' } = {}) {
   renderMessages(d, note);
   syncChips(p);
   $('portal-field').hidden = p.pierType !== 'C';
+  $('a-fields').hidden = p.pierType !== 'A';
+  $('d-fields').hidden = p.pierType !== 'D';
 
   const ok = d.errors.length === 0;
   btnGlb.disabled = !ok;
