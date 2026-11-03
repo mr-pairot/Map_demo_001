@@ -4,9 +4,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import {
-  DEFAULTS, PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA
-} from './bridge-gen.js';
+// ตัวสร้างสะพาน (ไฟล์เดียวกับ bpnp-map3d) โหลดเป็นสคริปต์ปกติใน bridge-builder.html
+const { DEFAULTS, PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA } = window.BridgeGen.create(THREE);
 
 export const PARAMS_KEY = 'bpnp.bridge.params';
 
@@ -100,13 +99,20 @@ function loop() {
 
 /* ---------- ฟอร์ม ---------- */
 function readForm() {
-  return normalizeParams(Object.fromEntries(new FormData(form)));
+  const raw = Object.fromEntries(new FormData(form));
+  raw.abutmentD = form.elements.abutmentD.checked;   // checkbox ที่ไม่ติ๊กไม่อยู่ใน FormData
+  return normalizeParams(raw);
 }
+
+// ชนิดตอม่อรายต้น { "2": "B" } → "2:B, 3:C"
+const piersText = (o) => Object.entries(o || {}).map(([k, v]) => `${k}:${v}`).join(', ');
 
 function writeForm(p) {
   for (const [key, value] of Object.entries(p)) {
     const el = form.elements[key];
     if (!el) continue;
+    if (el.type === 'checkbox') { el.checked = !!value; continue; }
+    if (key === 'piers') { el.value = piersText(value); continue; }
     if (el instanceof RadioNodeList) el.value = String(value);
     else el.value = key === 'gauge' ? String(Number(value)) : value;
   }
@@ -259,10 +265,13 @@ function wrapSvg(parts, w, h, label) {
 /* ---------- สรุปขนาด / ข้อความ ---------- */
 function renderSummary(d) {
   const p = d.params;
+  const spanDesc = p.spanText && !d.errors.length ? d.spans.map(f1).join(' + ') + ' ม.' : `${p.spanCount} × ${f1(d.L)} ม.`;
+  const types = d.spans.concat([0]).map((_, i) => (p.abutmentD && (i === 0 || i === d.spans.length)) ? 'D' : ((p.piers || {})[String(i + 1)] || p.pierType));
   const rows = [
-    ['ความยาวรวม', `${f1(d.totalLength)} ม. (${p.spanCount} × ${f1(d.L)} ม.)`],
-    ['ตอม่อ', `${d.pierCount} ต้น`]
+    ['ความยาวรวม', `${f1(d.totalLength)} ม. (${spanDesc})`],
+    ['ตอม่อ', `${d.pierCount} ต้น · ${types.join(' ')}`]
   ];
+  if (d.skew) rows.push(['มุมเฉียง', `${f1(d.skew)}° · ตอม่อยาว ${f1(Math.min(20, p.deckWidth / Math.cos(d.skewRad)))} ม. ตามแนวเฉียง`]);
   if (!d.errors.length) {
     rows.push(['ความสูงเสา', `${f1(d.columnHeight)} ม.`]);
     if (p.pierType === 'A') {
@@ -290,6 +299,7 @@ function renderMessages(d, extra = '') {
     ...d.errors.map((m) => `<p class="msg error">${m}</p>`),
     ...d.warnings.map((m) => `<p class="msg warn">${m}</p>`)
   ];
+  ((model && model.userData && model.userData.notes) || []).forEach((m) => html.push(`<p class="msg warn">${m}</p>`));
   if (extra) html.push(`<p class="msg">${extra}</p>`);
   messagesEl.innerHTML = html.join('');
 }
@@ -350,7 +360,8 @@ function download(blob, filename) {
 
 function fileBase(p) {
   const safe = p.name.replace(/[\\/:*?"<>|\s]+/g, '_');
-  return `${safe}_type${p.pierType}_${p.deckType}_${p.spanLength}m-x${p.spanCount}`;
+  const spans = p.spanText ? p.spanText.replace(/\+/g, '-') : `${p.spanLength}m-x${p.spanCount}`;
+  return `${safe}_type${p.pierType}_${p.deckType}_${spans}${p.skew ? `_skew${p.skew}` : ''}`;
 }
 
 btnGlb.addEventListener('click', async () => {
@@ -371,7 +382,7 @@ btnGlb.addEventListener('click', async () => {
 
 btnJson.addEventListener('click', () => {
   const p = readForm();
-  const data = { type: 'bpnp-bridge', version: 1, params: p };
+  const data = { type: 'bpnp-bridge', version: 2, params: p };
   download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `${fileBase(p)}.json`);
   renderMessages(deriveDims(p), `ดาวน์โหลด ${fileBase(p)}.json แล้ว`);
 });

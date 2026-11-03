@@ -239,7 +239,8 @@ const railLayer = {
   },
 
   render(gl, matrix) {
-    this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix).multiply(this.transform);
+    const arr = matrix && matrix.defaultProjectionData ? matrix.defaultProjectionData.mainMatrix : matrix;   // MapLibre 5 ส่ง object · 4 ส่ง matrix
+    this.camera.projectionMatrix = new THREE.Matrix4().fromArray(arr).multiply(this.transform);
     this.renderer.resetState();
     this.renderer.render(scene, this.camera);
   }

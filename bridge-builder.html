@@ -157,7 +157,7 @@
       <div class="grid2">
         <div class="field">
           <label for="in-span">ความยาว span (ม.)</label>
-          <input id="in-span" name="spanLength" type="number" min="10" max="80" step="1" inputmode="decimal">
+          <input id="in-span" name="spanLength" type="number" min="10" max="120" step="1" inputmode="decimal">
         </div>
         <label class="field">
           <span>จำนวน span</span>
@@ -165,6 +165,37 @@
         </label>
       </div>
       <div class="chips" data-for="spanLength" role="group" aria-label="ค่าความยาว span ที่ใช้บ่อย"></div>
+
+      <label class="field">
+        <span>ช่วงแบบกำหนดเอง</span>
+        <input name="spanText" type="text" autocomplete="off" placeholder="เช่น 3x40 หรือ 100+75" aria-describedby="hint-spantext">
+        <small id="hint-spantext">ว่าง = ความยาว span × จำนวน span · ช่วงไม่เท่ากันใช้ + คั่น (เหมือนช่อง Span ใน KML)</small>
+      </label>
+
+      <fieldset class="group">
+        <legend>ตอม่อริม · ตอม่อรายต้น · มุมเฉียง</legend>
+        <label class="check">
+          <input type="checkbox" name="abutmentD">
+          <span>ตอม่อริม (ต้นแรก/ต้นสุดท้าย) เป็นผนังทึบ Type D</span>
+        </label>
+        <div class="grid2">
+          <label class="field">
+            <span>กำแพงปีก (ม.)</span>
+            <input name="wingWall" type="number" min="0" max="12" step="0.5" inputmode="decimal">
+            <small>0 = ไม่มี · เฉพาะตอม่อริม Type D</small>
+          </label>
+          <label class="field">
+            <span>มุมเฉียง (องศา)</span>
+            <input name="skew" type="number" min="-60" max="60" step="0.5" inputmode="decimal">
+            <small>เหมือนช่อง Skew ใน KML · โครงเหล็กไม่รับ</small>
+          </label>
+        </div>
+        <label class="field">
+          <span>ชนิดตอม่อรายต้น</span>
+          <input name="piers" type="text" autocomplete="off" placeholder="เช่น 2:B, 3:C">
+          <small>เลขต้นนับจากต้นแรก = 1 · ต้นที่ไม่ระบุใช้ชนิดตอม่อด้านบน</small>
+        </label>
+      </fieldset>
 
       <div class="grid2">
         <label class="field">
@@ -183,6 +214,10 @@
           </select>
         </label>
       </div>
+      <label class="field">
+        <span>ระยะศูนย์กลางทางคู่ (ม.)</span>
+        <input name="trackSpacing" type="number" min="3.5" max="6.5" step="0.1" inputmode="decimal">
+      </label>
     </form>
 
     <dl id="summary" class="summary"></dl>
@@ -204,6 +239,7 @@
 
   <button id="btn-fit" class="btn fit-btn" type="button">จัดมุมกล้อง</button>
 
+  <script src="bridge-gen.js"></script>
   <script type="module" src="bridge-builder.js"></script>
 </body>
 </html>

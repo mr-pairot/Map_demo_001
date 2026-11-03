@@ -2,13 +2,23 @@
    bridge-gen.js — ตัวสร้างสะพาน (ใช้ร่วมกันทั้งหน้าออกแบบและหน้าแผนที่)
    หน่วยเป็นเมตร | แกน x = ตามแนวสะพาน, แกน y = ขึ้น, แกน z = ขวางสะพาน
    จุด origin (0,0,0) = โคนตอม่อตัวแรก (กึ่งกลางเสา ระดับพื้นดิน)
-   ========================================================= */
-import * as THREE from 'three';
+   =========================================================
+ *
+ * ── v2 (ใช้ไฟล์เดียวกันทั้ง Map_demo_001 และ bpnp-map3d) ──
+ *   ไฟล์นี้เป็นสคริปต์ปกติ (ไม่ใช่ ES module) — โหลดด้วย <script src> แล้วเรียก
+ *     const G = BridgeGen.create(THREE);            // Map_demo_001 (THREE จาก import)
+ *     const G = BPNP.bridgeGen.create(THREE);       // bpnp-map3d (คัดลอกไฟล์นี้เป็น js/layers/structure/bridge_gen.js)
+ *   ค่าตั้งสะพานเก็บแยกในแต่ละระบบ (demo: localStorage/ไฟล์ .json · bpnp-map3d: data/json/bridge_3d.json)
+ *   ทดสอบบน demo แล้วคัดลอกไฟล์นี้ไปใช้กับ bpnp-map3d ได้ทันที
+ */
+(function (root) {
+  'use strict';
+  function create(THREE) {
 
-export const GENERATOR_ID = 'bpnp-bridge-gen@1';
+const GENERATOR_ID = 'bpnp-bridge-gen@2';
 
-export const DEFAULTS = Object.freeze({
-  version: 1,
+const DEFAULTS = Object.freeze({
+  version: 2,
   name: 'สะพาน 1',
   pierType: 'A',        // A = เสาเดี่ยวผายบน, B = เสาคู่, C = พอร์ทัล (คร่อมถนน/ทางด้านล่าง), D = ผนังทึบ
   deckType: 'concrete', // concrete = พื้นคอนกรีต (box girder), truss = โครงเหล็ก
@@ -26,13 +36,20 @@ export const DEFAULTS = Object.freeze({
   dThick: 1.2,          // Type D: ความหนาผนัง ตามแนวสะพาน (ม.)
   dRadius: 0.6,         // Type D: รัศมีขอบโค้งริมผนัง (ม.)
   tracks: 2,            // จำนวนทางรถไฟบนสะพาน 0 / 1 / 2
-  gauge: 1.0            // ขนาดราง 1.000 หรือ 1.435 ม.
+  gauge: 1.0,           // ขนาดราง 1.000 หรือ 1.435 ม.
+  // ── v2 (ตรงกับ bpnp-map3d) ──
+  trackSpacing: 5.0,    // ระยะศูนย์กลางทางคู่ (ม.)
+  spanText: '',         // ช่วงแบบข้อความ "3x40", "100+75", "2x30+45" — ว่าง = spanLength × spanCount
+  piers: {},            // ชนิดตอม่อรายต้น { "2": "B" } นับจากต้นแรก = 1 (ตอม่อริมเป็น D เมื่อ abutmentD)
+  abutmentD: true,      // ตอม่อริม (ต้นแรก/ต้นสุดท้าย) เป็นผนังทึบ Type D
+  wingWall: 2.5,        // ความยาวกำแพงปีกที่ตอม่อริม (ม.) 0 = ไม่มี (มีเฉพาะเมื่อตอม่อริมเป็น D)
+  skew: 0               // มุมเฉียงของตอม่อ (องศา) ความหมายเดียวกับช่อง Skew ใน KML · โครงเหล็กไม่รับ
 });
 
-export const LIMITS = Object.freeze({
+const LIMITS = Object.freeze({
   deckLevel: [4, 40],
   deckWidth: [4, 20],
-  spanLength: [10, 80],
+  spanLength: [10, 120],   // v2: เดิม 80 — โครงการมีช่วง 100 ม.
   spanCount: [1, 30],
   girderDepth: [0, 6],
   portalSpan: [6, 40],
@@ -41,23 +58,25 @@ export const LIMITS = Object.freeze({
   aTopWidth: [0, 16],
   aFlareDepth: [0.5, 3],
   dThick: [1, 1.5],
-  dRadius: [0.5, 0.75]
+  dRadius: [0.5, 0.75],
+  trackSpacing: [3.5, 6.5],
+  wingWall: [0, 12],
+  skew: [-60, 60]
 });
 
-export const PRESETS = Object.freeze({
+const PRESETS = Object.freeze({
   spanLength: [20, 25, 30, 40],
   deckWidth: [6, 8, 10, 12],
   portalSpan: [12, 16, 20, 25]
 });
 
-const TRACK_SPACING = 4.0; // ระยะศูนย์กลางรางคู่ (ม.)
 const SPAN_GAP = 0.1;      // ช่องว่างรอยต่อระหว่างช่วง (ม.)
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const r1 = (v) => Math.round(v * 10) / 10;
 
 /* ---------- พารามิเตอร์ ---------- */
-export function normalizeParams(input = {}) {
+function normalizeParams(input = {}) {
   const p = { ...DEFAULTS, ...input };
   p.pierType = ['A', 'B', 'C', 'D'].includes(p.pierType) ? p.pierType : 'A';
   p.aTopMode = p.aTopMode === 'cap' ? 'cap' : 'direct';
@@ -74,16 +93,63 @@ export function normalizeParams(input = {}) {
   p.tracks = [0, 1, 2].includes(Number(p.tracks)) ? Number(p.tracks) : DEFAULTS.tracks;
   p.gauge = Number(p.gauge) === 1.435 ? 1.435 : 1.0;
   p.name = String(p.name || DEFAULTS.name).trim().slice(0, 60) || DEFAULTS.name;
-  p.version = 1;
+  // v2
+  p.spanText = String(p.spanText || '').replace(/\s+/g, '').replace(/[×X*]/g, 'x');
+  p.piers = normalizePiers(p.piers);
+  const ab = input.abutmentD;
+  p.abutmentD = ab === undefined ? Number(input.version) !== 1          // ไฟล์ v1 เดิม: ตอม่อทุกต้นชนิดเดียวกัน
+    : (ab === true || ab === 'true' || ab === 'on' || ab === 1 || ab === '1');
+  p.version = 2;
   return p;
 }
 
+// ชนิดตอม่อรายต้น: รับ { "2": "B" } หรือข้อความ "2:B, 3:C" → { "2": "B", "3": "C" }
+function normalizePiers(v) {
+  const out = {};
+  const put = (k, t) => {
+    const i = parseInt(k, 10), s = String(t || '').trim().toUpperCase();
+    if (i >= 1 && ['A', 'B', 'C', 'D'].includes(s)) out[String(i)] = s;
+  };
+  if (typeof v === 'string') v.split(/[,;\s]+/).forEach((part) => { const m = part.match(/^(\d+)\s*[:=]\s*([A-Da-d])$/); if (m) put(m[1], m[2]); });
+  else if (v && typeof v === 'object') Object.entries(v).forEach(([k, t]) => put(k, t));
+  return out;
+}
+
+// "3x40" → [40,40,40] · "100+75" → [100,75] · "2x30+45" → [30,30,45] · รูปแบบผิด → null
+function parseSpans(text) {
+  const out = [];
+  for (const part of String(text || '').split('+')) {
+    const t = part.trim(); if (!t) continue;
+    const m = t.match(/^(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)$/);
+    if (m) { for (let i = 0; i < +m[1]; i++) out.push(+m[2]); }
+    else if (/^\d+(\.\d+)?$/.test(t)) out.push(+t);
+    else return null;
+  }
+  return out.length ? out : null;
+}
+
 /* ---------- คำนวณขนาดชิ้นส่วนจากพารามิเตอร์ ---------- */
-export function deriveDims(input) {
+function deriveDims(input) {
   const p = normalizeParams(input);
   const W = p.deckWidth;
-  const L = p.spanLength;
+  const errors = [];
+  const warnings = [];
+  // ช่วง: spanText (ถ้ามี) หรือ spanLength × spanCount · ขนาดชิ้นส่วนส่วนบนคิดจากช่วงที่ยาวที่สุด
+  let spans = null;
+  if (p.spanText) {
+    spans = parseSpans(p.spanText);
+    if (!spans) errors.push(`รูปแบบช่วง "${p.spanText}" ไม่ถูกต้อง ใช้แบบ 3x40 หรือ 100+75`);
+    else if (spans.some((s) => s < LIMITS.spanLength[0] || s > LIMITS.spanLength[1])) {
+      spans = spans.map((s) => clamp(s, LIMITS.spanLength[0], LIMITS.spanLength[1]));
+      warnings.push(`ความยาวช่วงต้องอยู่ระหว่าง ${LIMITS.spanLength[0]}–${LIMITS.spanLength[1]} ม. ปรับให้อยู่ในช่วงแล้ว`);
+    }
+  }
+  if (!spans) spans = Array.from({ length: p.spanCount }, () => p.spanLength);
+  const L = Math.max(...spans);
   const truss = p.deckType === 'truss';
+  // มุมเฉียง: โครงเหล็กไม่มีตอม่อเฉียง
+  let skew = p.skew;
+  if (truss && skew) { warnings.push(`โครงเหล็กไม่มีตอม่อเฉียง — ไม่ใช้มุมเฉียง ${skew}° (ตรวจข้อมูล)`); skew = 0; }
 
   // ความลึกโครงสร้างส่วนบน: คอนกรีต ≈ span/18, โครงเหล็ก = ระบบพื้น 1.6 ม.
   const superDepth = truss ? 1.6 : (p.girderDepth > 0 ? p.girderDepth : r1(clamp(L / 18, 1.2, 4)));
@@ -96,8 +162,6 @@ export function deriveDims(input) {
   const padZ = [-padHalf, padHalf];
   const padNeed = r1(padHalf * 2 + 0.9); // ความกว้างหัวเสาขั้นต่ำที่วางแผ่นรองได้
 
-  const errors = [];
-  const warnings = [];
   let colD, capDepth = 0, capLen, capThick, colSpacing = 0, haunch = 0, hasCap = true;
   let aBase = 0, aThick = 0, aTop = 0, flareDepth = 0, flareLip = 0;
   let wallWidth = 0, wallRadius = 0;
@@ -186,15 +250,16 @@ export function deriveDims(input) {
     wallWidth, wallRadius,
     clearWidth: p.pierType === 'C' ? colSpacing - colD : 0,
     columnHeight, trussHeight, trussZ, trussBottomY,
-    totalLength: L * p.spanCount,
-    pierCount: p.spanCount + 1,
-    trackCenters: p.tracks === 2 ? [-TRACK_SPACING / 2, TRACK_SPACING / 2] : p.tracks === 1 ? [0] : [],
+    spans, skew, skewRad: skew * Math.PI / 180,
+    totalLength: spans.reduce((a, b) => a + b, 0),
+    pierCount: spans.length + 1,
+    trackCenters: p.tracks === 2 ? [-p.trackSpacing / 2, p.trackSpacing / 2] : p.tracks === 1 ? [0] : [],
     errors, warnings
   };
 }
 
 /* ---------- รูปด้านหน้าเสา Type A: [{ y, a }] a = ครึ่งความกว้างขวางสะพาน ---------- */
-export function pierProfileA(d, steps = 12) {
+function pierProfileA(d, steps = 12) {
   const H = d.columnHeight;
   const a0 = d.aBase / 2;
   const a1 = d.aTop / 2;
@@ -213,7 +278,7 @@ export function pierProfileA(d, steps = 12) {
 }
 
 /* ---------- วัสดุ (ใช้ร่วมกัน ไม่ dispose) ---------- */
-export const MATERIALS = {
+const MATERIALS = {
   deck:    new THREE.MeshStandardMaterial({ name: 'concrete-deck', color: 0xcac6bd, roughness: 0.92 }),
   pier:    new THREE.MeshStandardMaterial({ name: 'concrete-pier', color: 0xb5afa4, roughness: 0.95 }),
   steel:   new THREE.MeshStandardMaterial({ name: 'steel', color: 0x6d8294, roughness: 0.55, metalness: 0.35 }),
@@ -507,48 +572,130 @@ function buildTrussSpan(d) {
   return g;
 }
 
-/* ---------- สร้างสะพานทั้งชุด ---------- */
-export function buildBridge(input) {
-  const d = deriveDims(input);
-  const p = d.params;
+/* ---------- ชิ้นส่วนที่ใช้ร่วมกับ bpnp-map3d (v2) ----------
+   ทั้งสองระบบใช้ฟังก์ชันชุดนี้วางตอม่อ/ช่วงทีละชิ้น — demo วางเป็นเส้นตรงใน buildBridge()
+   bpnp-map3d วางตาม กม. บนแนวราง (js/layers/structure/bridge_3d.js) */
+
+// ชนิดตอม่อต้นที่ i (0 = ต้นแรก, n = ต้นสุดท้าย เมื่อมี n ช่วง)
+function pierTypeAt(p, i, n) {
+  if (p.abutmentD && (i === 0 || i === n)) return 'D';
+  const t = String((p.piers || {})[String(i + 1)] || p.pierType || 'A').toUpperCase();
+  return ['A', 'B', 'C', 'D'].includes(t) ? t : 'A';
+}
+
+// พารามิเตอร์ของตอม่อต้นที่ i: ชนิด · ช่วงที่ยาวกว่าระหว่างสองข้าง (กำหนดความลึกคาน)
+// สะพานเฉียง: ความกว้างตามแนวตอม่อ = ความกว้างพื้น ÷ cos(skew) ให้รับพื้นได้เต็มความกว้าง (สูงสุด 20 ม.)
+function pierParams(p, spans, i, skewRad = 0) {
+  const n = spans.length;
+  return Object.assign({}, p, {
+    pierType: pierTypeAt(p, i, n),
+    spanLength: Math.max(spans[i - 1] || 0, spans[i] || 0),
+    spanCount: 1, spanText: '', skew: 0,   // การเฉียงจัดการตอนวาง (หมุนตอม่อ/เฉือนช่วง) — ไม่เตือนซ้ำรายต้น
+    deckWidth: skewRad ? Math.min(20, Math.round(p.deckWidth / Math.cos(skewRad) * 100) / 100) : p.deckWidth
+  });
+}
+
+// พารามิเตอร์ของช่วงยาว L
+function spanParams(p, L) { return Object.assign({}, p, { spanLength: L, spanCount: 1, spanText: '', skew: 0 }); }
+
+// ระดับพื้นเดียวทั้งสะพาน: ยกทีละ 0.25 ม. จนตอม่อทุกต้นสร้างได้ → { deckLevel, raised }
+function fitDeckLevel(p, spans, skewRad = 0) {
+  const ok = (dl) => spans.concat([0]).every((_, i) => deriveDims(Object.assign(pierParams(p, spans, i, skewRad), { deckLevel: dl })).errors.length === 0);
+  let dl = p.deckLevel, guard = 0;
+  while (!ok(dl) && guard++ < 140) dl = Math.round((dl + 0.25) * 100) / 100;
+  return { deckLevel: dl, raised: dl !== p.deckLevel };
+}
+
+// ช่วงสะพาน (คอนกรีต / โครงเหล็ก) x จาก 0 ถึง L
+function buildSpan(d, kit) { return d.truss ? buildTrussSpan(d) : buildConcreteSpan(d, kit); }
+
+// สะพานเฉียง: เฉือนช่วงทั้งก้อน x' = x + tan(skew)·z → ปลายช่วงขนานแนวตอม่อ (แนวกึ่งกลาง z = 0 ไม่เปลี่ยน)
+function skewSpan(span, skewRad) {
+  if (!skewRad) return span;
+  span.updateMatrix();
+  span.matrixAutoUpdate = false;
+  span.matrix.multiply(new THREE.Matrix4().makeShear(0, 0, 0, 0, Math.tan(skewRad), 0));
+  return span;
+}
+
+/* กำแพงปีกที่ตอม่อริม (ตอม่อ Type D)
+   dir = +1 ยื่นไปทาง +x (หลังตอม่อริมท้าย) · −1 ยื่นไปทาง −x (หน้าตอม่อริมหัว) · ext = ความยาว (ม.)
+   สูงจากพื้นถึงใต้พื้นสะพาน · เริ่มที่ผิวผนังตรงปลายผนังสองข้าง
+   skewRad = มุมเฉียงของตอม่อ (ตอม่อหมุน +skew) → กำแพงปีกหมุนกลับ −skew ให้ขนานแนวสะพาน/แนวทางรถไฟ */
+function buildWingWalls(d, dir, ext, skewRad = 0) {
+  const g = new THREE.Group();
+  g.name = 'wing-walls';
+  const h = Math.max(1, d.params.deckLevel - 0.3);
+  const t = 0.4;
+  const zEdge = Math.max(1, (d.wallWidth || (d.W - 1)) / 2 - t / 2);
+  const ca = Math.cos(skewRad), sa = Math.sin(skewRad);   // แนวสะพานในกรอบของตอม่อ = (cos, 0, sin)
+  for (const z of [-zEdge, zEdge]) {
+    const w = box(ext, h, t, MATERIALS.pier, 'wing-wall');
+    w.position.set(dir * d.params.dThick / 2 + dir * ca * ext / 2, h / 2, z + dir * sa * ext / 2);
+    w.rotation.y = -skewRad;
+    g.add(w);
+  }
+  return g;
+}
+
+/* ---------- สร้างสะพานทั้งชุด (demo: แนวตรงตามแกน x) ----------
+   origin = โคนตอม่อต้นแรก · ช่วงไม่เท่ากัน (spanText) · ชนิดตอม่อรายต้น · ตอม่อริม D + กำแพงปีก · มุมเฉียง */
+function buildBridge(input) {
+  const d0 = deriveDims(input);
+  const p0 = d0.params;
   const root = new THREE.Group();
-  root.name = p.name;
+  root.name = p0.name;
   root.userData = {
     generator: GENERATOR_ID,
-    bridgeParams: { ...p },
-    totalLength: d.totalLength,
+    bridgeParams: { ...p0 },
+    totalLength: d0.totalLength,
     axes: 'x=along bridge, y=up, z=across; origin=base of first pier; unit=m'
   };
-  if (d.errors.length) {
-    root.userData.errors = d.errors;
+  if (d0.errors.length) {
+    root.userData.errors = d0.errors;
     return root;
   }
+  const spans = d0.spans, n = spans.length, skewRad = d0.skewRad;
+  const fit = fitDeckLevel(p0, spans, skewRad);
+  const p = Object.assign({}, p0, { deckLevel: fit.deckLevel });
+  const notes = [];
+  if (fit.raised) notes.push(`ระดับพื้น ${p0.deckLevel} ม. ต่ำเกินไปสำหรับตอม่อบางต้น ใช้ ${fit.deckLevel} ม.`);
 
-  const kit = makeKit(d);
+  const xs = [0];
+  spans.forEach((L) => xs.push(xs[xs.length - 1] + L));
+
   const piers = new THREE.Group();
   piers.name = 'piers';
-  for (let i = 0; i < d.pierCount; i++) {
-    const pier = buildPier(d, kit);
+  for (let i = 0; i <= n; i++) {
+    const d = deriveDims(pierParams(p, spans, i, skewRad));
+    d.warnings.forEach((w) => notes.push(`ตอม่อ ${i + 1}: ${w}`));
+    const pier = buildPier(d, makeKit(d));
     pier.name = `pier-${i + 1}`;
-    pier.position.x = i * d.L;
+    if (p.abutmentD && (i === 0 || i === n) && p.wingWall > 0.3) pier.add(buildWingWalls(d, i === 0 ? -1 : 1, p.wingWall, skewRad));
+    pier.position.x = xs[i];
+    pier.rotation.y = skewRad;
     piers.add(pier);
   }
 
-  const spans = new THREE.Group();
-  spans.name = 'spans';
-  for (let i = 0; i < p.spanCount; i++) {
-    const span = d.truss ? buildTrussSpan(d) : buildConcreteSpan(d, kit);
+  const spanGroup = new THREE.Group();
+  spanGroup.name = 'spans';
+  spans.forEach((L, i) => {
+    const d = deriveDims(spanParams(p, L));
+    const span = buildSpan(d, makeKit(d));
     span.name = `span-${i + 1}`;
-    span.position.x = i * d.L;
-    spans.add(span);
-  }
+    span.position.x = xs[i];
+    skewSpan(span, skewRad);
+    spanGroup.add(span);
+  });
 
-  root.add(piers, spans);
+  root.add(piers, spanGroup);
+  root.userData.notes = [...new Set(notes)];
+  root.userData.deckLevel = fit.deckLevel;
   return root;
 }
 
 // คืนหน่วยความจำ GPU ของสะพานที่สร้างจาก buildBridge (ไม่ยุ่งกับชิ้นที่ใช้ร่วม)
-export function disposeBridge(obj) {
+function disposeBridge(obj) {
   if (!obj) return;
   const seen = new Set();
   obj.traverse((o) => {
@@ -560,10 +707,22 @@ export function disposeBridge(obj) {
 }
 
 // หาพารามิเตอร์ที่ฝังไว้ในโมเดล (เช่นจากไฟล์ .glb ที่ export จากหน้าออกแบบ)
-export function findBridgeParams(obj) {
+function findBridgeParams(obj) {
   let found = null;
   obj.traverse((o) => {
     if (!found && o.userData && o.userData.bridgeParams) found = o.userData.bridgeParams;
   });
   return found ? normalizeParams(found) : null;
 }
+
+  return {
+    GENERATOR_ID, DEFAULTS, LIMITS, PRESETS, MATERIALS,
+    normalizeParams, parseSpans, deriveDims, pierProfileA, makeKit,
+    buildPier, buildSpan, buildWingWalls, skewSpan, pierTypeAt, pierParams, spanParams, fitDeckLevel,
+    buildBridge, disposeBridge, findBridgeParams
+  };
+}
+
+  root.BridgeGen = { create, GENERATOR_ID: 'bpnp-bridge-gen@2' };
+  if (root.BPNP) root.BPNP.bridgeGen = { create };
+})(typeof window !== 'undefined' ? window : globalThis);

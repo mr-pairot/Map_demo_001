@@ -4,9 +4,8 @@
    ========================================================= */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import {
-  DEFAULTS, normalizeParams, deriveDims, buildBridge, disposeBridge, findBridgeParams
-} from './bridge-gen.js';
+// ตัวสร้างสะพาน (ไฟล์เดียวกับ bpnp-map3d) โหลดเป็นสคริปต์ปกติใน bridge-map.html
+const { DEFAULTS, normalizeParams, deriveDims, buildBridge, disposeBridge, findBridgeParams } = window.BridgeGen.create(THREE);
 
 const maplibregl = window.maplibregl;
 const PARAMS_KEY = 'bpnp.bridge.params';
@@ -17,6 +16,8 @@ const $ = (id) => document.getElementById(id);
 const f1 = (v) => (Math.round(v * 10) / 10).toLocaleString('th-TH');
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const rad = THREE.MathUtils.degToRad;
+// คำอธิบายช่วง: ช่วงกำหนดเอง "2x25" หรือ จำนวน × ความยาว (v2)
+const spanDesc = (p, d) => (p.spanText ? `${p.spanText} (รวม ${f1((d || deriveDims(p)).totalLength)} ม.)` : `${p.spanCount} × ${f1(p.spanLength)} ม.`);
 const deg = THREE.MathUtils.radToDeg;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -76,7 +77,8 @@ const bridgeLayer = {
     this.renderer.autoClear = false;
   },
   render(gl, matrix) {
-    const m = new THREE.Matrix4().fromArray(matrix);
+    const arr = matrix && matrix.defaultProjectionData ? matrix.defaultProjectionData.mainMatrix : matrix;   // MapLibre 5 ส่ง object · 4 ส่ง matrix
+    const m = new THREE.Matrix4().fromArray(arr);
     const list = state.placed.map((r) => r.item);
     if (state.draft && state.draft.item) list.push(state.draft.item);
     for (const it of list) {
@@ -228,14 +230,15 @@ function computeDraft() {
   }
 
   const params = { ...state.model.params };
-  if (mode === 'line' && dist > 1) {
+  // ช่วงแบบกำหนดเอง (spanText) คงตามแบบ — ไม่ยืด/หดให้พอดีระยะ
+  if (mode === 'line' && dist > 1 && !params.spanText) {
     if (state.fit === 'count') params.spanCount = clamp(Math.round(dist / params.spanLength), 1, 30);
-    else params.spanLength = clamp(Math.round((dist / params.spanCount) * 10) / 10, 10, 80);
+    else params.spanLength = clamp(Math.round((dist / params.spanCount) * 10) / 10, 10, 120);
   }
   const d = deriveDims(params);
   if (d.errors.length) return { error: d.errors[0] };
 
-  const spans = `${d.params.spanCount} ช่วง × ${f1(d.L)} ม.`;
+  const spans = spanDesc(d.params, d);
   return {
     kind: 'params', obj: buildBridge(d.params), params: d.params, bearing, length: d.totalLength, dist,
     name: d.params.name,
@@ -368,7 +371,7 @@ function describeParams(p) {
   const portal = p.pierType === 'C' ? ` (เสาห่าง ${f1(p.portalSpan)} ม.)`
     : p.pierType === 'A' ? (p.aTopMode === 'cap' ? ' (เสาผาย มีคานหัวเสา)' : ' (เสาผาย)')
     : p.pierType === 'D' ? ` (ผนังหนา ${f1(p.dThick)} ม.)` : '';
-  return `Type ${p.pierType}${portal} ${DECK_TH[p.deckType]}, กว้าง ${f1(p.deckWidth)} ม., span ${f1(p.spanLength)} ม. × ${p.spanCount}, สูง ${f1(p.deckLevel)} ม.`;
+  return `Type ${p.pierType}${portal} ${DECK_TH[p.deckType]}, กว้าง ${f1(p.deckWidth)} ม., span ${spanDesc(p)}, สูง ${f1(p.deckLevel)} ม.${p.skew && p.deckType !== 'truss' ? `, เฉียง ${f1(p.skew)}°` : ''}`;
 }
 
 function renderModelInfo(note = '') {
@@ -449,7 +452,7 @@ function renderList() {
     <li>
       <div class="placed-text">
         <b>${i + 1}. ${r.name}</b>
-        <span>${r.kind === 'params' ? `Type ${r.params.pierType}, ${r.params.spanCount} × ${f1(r.params.spanLength)} ม.` : r.glbName}, ทิศ ${f1(r.bearing)}°</span>
+        <span>${r.kind === 'params' ? `Type ${r.params.pierType}, ${spanDesc(r.params)}` : r.glbName}, ทิศ ${f1(r.bearing)}°</span>
       </div>
       <button class="btn small" type="button" data-act="fly" data-id="${r.id}">ดู</button>
       <button class="btn small" type="button" data-act="del" data-id="${r.id}" aria-label="ลบ ${r.name}">ลบ</button>

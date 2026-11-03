@@ -52,3 +52,46 @@
 - ขนาดชิ้นส่วนเป็นค่าประมาณเพื่อการแสดงผล (เช่น ความลึกคาน ≈ span/18) ไม่ใช่ผลการออกแบบโครงสร้าง
 - ฐานตอม่ออยู่ที่ระดับ 0 ถ้าเปิด terrain ต้องบวกระดับพื้นดินเพิ่ม
 - โค้ดใช้ MapLibre GL JS 4.7.1 ถ้าอัปเกรดเป็น v5 ต้องแก้ `render(gl, matrix)` ของ custom layer ตาม API ใหม่
+
+
+---
+
+## v2 — ใช้ตัวสร้างไฟล์เดียวกับ bpnp-map3d
+
+`bridge-gen.js` เป็น **สคริปต์ปกติ** (ไม่ใช่ ES module) ใช้ไฟล์เดียวกันทั้ง Map_demo_001 และ bpnp-map3d
+
+```html
+<script src="bridge-gen.js"></script>              <!-- โหลดก่อน module -->
+<script type="module">
+  import * as THREE from 'three';
+  const G = window.BridgeGen.create(THREE);
+</script>
+```
+
+**ขั้นตอนใช้งานร่วมกัน:** ทดสอบ/ปรับในหน้าออกแบบของ demo → คัดลอก `bridge-gen.js` ไปเป็น `js/layers/structure/bridge_gen.js` ของ bpnp-map3d (ไม่ต้องแก้)
+bpnp-map3d ไม่ได้โหลดอะไรจาก demo และเก็บค่าสะพานแยกที่ `data/json/bridge_3d.json` · demo เก็บค่าใน localStorage / ไฟล์ .json
+
+### พารามิเตอร์ใหม่ (params version 2)
+| ค่า | ความหมาย | ค่าตั้งต้น |
+|---|---|---|
+| `spanText` | ช่วงแบบข้อความ `3x40`, `100+75`, `2x30+45` (ว่าง = spanLength × spanCount) | ว่าง |
+| `piers` | ชนิดตอม่อรายต้น `{ "2": "B" }` หรือข้อความ `2:B, 3:C` (ต้นแรก = 1) | ว่าง |
+| `abutmentD` | ตอม่อริม (ต้นแรก/สุดท้าย) เป็นผนังทึบ Type D | เปิด (ไฟล์ v1 เดิม = ปิด) |
+| `wingWall` | ความยาวกำแพงปีกที่ตอม่อริม Type D (ม.) 0 = ไม่มี | 2.5 |
+| `skew` | มุมเฉียงตอม่อ (องศา) ความหมายเดียวกับช่อง `Skew` ใน KML · โครงเหล็กไม่รับ | 0 |
+| `trackSpacing` | ระยะศูนย์กลางทางคู่ (ม.) | 5.0 |
+| `spanLength` | ช่วงสูงสุดขยายเป็น 120 ม. | |
+
+### การเฉียง (เหมือน bpnp-map3d)
+- ตอม่อหมุน +skew จากแนวสะพาน · ความกว้างตามแนวเฉียง = deckWidth ÷ cos(skew) (สูงสุด 20 ม.)
+- ช่วงสะพานเฉือน `x' = x + tan(skew)·z` → พื้นเป็นสี่เหลี่ยมด้านขนาน ปลายขนานแนวตอม่อ
+- กำแพงปีกเริ่มที่ปลายผนังตอม่อเฉียง แต่ขนานแนวสะพาน
+
+### ฟังก์ชันที่ใช้ร่วม (สำหรับวางทีละชิ้น)
+`parseSpans`, `pierTypeAt`, `pierParams`, `spanParams`, `fitDeckLevel`, `buildPier`, `buildSpan`, `skewSpan`, `buildWingWalls`
+— demo ใช้ใน `buildBridge()` (แนวตรง) · bpnp-map3d ใช้วางตาม กม. บนแนวราง
+
+### อื่น ๆ
+- MapLibre 5.24.0 (เท่ากับ bpnp-map3d) — custom layer รองรับ render แบบ v5 และ v4
+- ไฟล์ .json ที่ดาวน์โหลดเป็น version 2 · เปิดไฟล์ version 1 เดิมได้ (ตอม่อทุกต้นชนิดเดียวกันเหมือนเดิม)
+- หน้าแผนที่ แบบ "จุดเริ่ม–จุดปลาย": ช่วงแบบกำหนดเองคงตามแบบ ไม่ยืด/หดให้พอดีระยะ
