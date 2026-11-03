@@ -53,6 +53,19 @@
         <input name="name" type="text" maxlength="60" autocomplete="off">
       </label>
 
+      <div class="field" data-kinds="concrete">
+        <label for="in-preset">แบบมาตรฐานโครงการ</label>
+        <select id="in-preset" name="preset" aria-describedby="hint-preset">
+          <option value="none">ไม่ใช้ (กรอกเอง)</option>
+          <option value="auto">อัตโนมัติตามความยาวช่วง</option>
+          <option value="cb15">กรอกตามแบบ Slab span 15 ม.</option>
+          <option value="cb20">กรอกตามแบบ Slab span 20 ม.</option>
+          <option value="cb25">กรอกตามแบบ Slab span 25 ม.</option>
+          <option value="cb30">กรอกตามแบบ Slab span 30 ม.</option>
+        </select>
+        <small id="hint-preset">อัตโนมัติ = แต่ละช่วงใช้แบบของตัวเอง (คาน พื้น ราว ตามแบบ) · เลือกแบบช่วงใด = กรอกค่าตามแบบนั้นลงช่องให้แก้ต่อได้</small>
+      </div>
+
       <fieldset class="group">
         <legend>ชนิดตอม่อ</legend>
         <div class="type-cards">
@@ -162,6 +175,22 @@
             <small>0 = คำนวณให้</small>
           </label>
         </div>
+        <label class="field">
+          <span>ตำแหน่งคาน (ม. จากศูนย์กลาง)</span>
+          <input name="girderList" type="text" autocomplete="off" placeholder="เช่น ±1.3, ±2.5, ±3.7">
+          <small>ว่าง = ใช้จำนวนคาน กระจายเท่ากัน · ± = สองข้าง</small>
+        </label>
+        <details class="more">
+          <summary>หน้าตัดคานละเอียด</summary>
+          <div class="grid2">
+            <label class="field"><span>ปีกล่างกว้าง (ม.)</span><input name="bottomWidth" type="number" min="0" max="2.5" step="0.05" inputmode="decimal"></label>
+            <label class="field"><span>เอวหนา (ม.)</span><input name="webThick" type="number" min="0" max="1" step="0.01" inputmode="decimal"></label>
+            <label class="field"><span>ปีกบนหนา / ผาย (ม.)</span><span class="row2"><input name="topFlangeT" type="number" min="0" max="0.6" step="0.01" inputmode="decimal" aria-label="ปีกบนหนา"><input name="topTaper" type="number" min="0" max="0.6" step="0.01" inputmode="decimal" aria-label="ส่วนผายใต้ปีกบน"></span></label>
+            <label class="field"><span>ปีกล่างหนา / ผาย (ม.)</span><span class="row2"><input name="botFlangeT" type="number" min="0" max="0.8" step="0.01" inputmode="decimal" aria-label="ปีกล่างหนา"><input name="botTaper" type="number" min="0" max="0.6" step="0.01" inputmode="decimal" aria-label="ส่วนผายเหนือปีกล่าง"></span></label>
+          </div>
+          <small class="note">0 = คำนวณให้ตามความสูงคาน</small>
+          <label class="field"><span>ปลายคานถึงแนวตอม่อ (ม.)</span><input name="endGap" type="number" min="0" max="0.5" step="0.01" inputmode="decimal"></label>
+        </details>
         <div class="field">
           <span class="field-label">คานริม ด้านนอก</span>
           <div class="segmented" role="radiogroup" aria-label="รูปด้านนอกของคานริม">
@@ -177,16 +206,73 @@
             <option value="mid">ปลาย + กลางช่วง</option>
             <option value="third">ปลาย + ที่ 1/3</option>
             <option value="spacing">ทุกระยะที่กำหนด</option>
+            <option value="list">กำหนดตำแหน่งเอง</option>
           </select>
         </label>
         <label class="field" id="dspacing-field">
           <span>ระยะคานขวาง (ม.)</span>
           <input name="diaphragmSpacing" type="number" min="3" max="30" step="0.5" inputmode="decimal">
         </label>
+        <label class="field" id="dlist-field">
+          <span>ตำแหน่งคานขวาง (ม. จากปลายคาน)</span>
+          <input name="diaphragmList" type="text" autocomplete="off" placeholder="เช่น 5.135, 9.96, 14.785">
+          <small>วัดตามแนวศูนย์กลาง · คานขวางกลางช่วงตั้งฉากกับคานเสมอ แม้สะพานเฉียง</small>
+        </label>
+        <div class="grid2">
+          <label class="field"><span>คานขวางหนา (ม.)</span><input name="diaphragmThick" type="number" min="0" max="1" step="0.05" inputmode="decimal"><small>0 = คำนวณให้</small></label>
+          <label class="field"><span>คานขวางปลายหนา (ม.)</span><input name="endDiaphragmThick" type="number" min="0.2" max="1.5" step="0.05" inputmode="decimal"></label>
+        </div>
+        <label class="check">
+          <input type="checkbox" name="endDiaphragm">
+          <span>คานขวางปลายเต็มความลึก (เฉียงตามแนวตอม่อ)</span>
+        </label>
+        <div class="grid2" id="endblock-fields">
+          <label class="field"><span>ปลายคานทึบ (ม.)</span><input name="endBlock" type="number" min="0" max="6" step="0.05" inputmode="decimal"><small>0 = ไม่มี</small></label>
+          <label class="field"><span>ช่วงสอบเป็นรูป I (ม.)</span><input name="endTaper" type="number" min="0" max="3" step="0.05" inputmode="decimal"></label>
+        </div>
+        <label class="check">
+          <input type="checkbox" name="bearingDetail">
+          <span>แผ่นยางรองคานบนแท่นคอนกรีต ใต้ปลายคานทุกตัว</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="restrainBlocks">
+          <span>บล็อกกันเลื่อนระหว่างคานบนตอม่อ</span>
+        </label>
         <label class="field" id="slab-field">
           <span>ความหนาแผ่นพื้น (ม.)</span>
           <input name="slabThick" type="number" min="0.15" max="0.5" step="0.01" inputmode="decimal">
         </label>
+      </div>
+
+      <fieldset class="group" id="decksec-group">
+        <legend>หน้าตัดพื้น</legend>
+        <div class="segmented" role="radiogroup" aria-label="หน้าตัดพื้น">
+          <label><input type="radio" name="deckSection" value="simple"><span>พื้นเรียบ + ราว</span></label>
+          <label><input type="radio" name="deckSection" value="trough"><span>กันหิน + รางสายเคเบิล</span></label>
+        </div>
+      </fieldset>
+
+      <div class="type-fields" id="trough-fields" hidden>
+        <div class="grid2">
+          <label class="field"><span>พื้นหนาที่ขอบ (ม.)</span><input name="slabEdge" type="number" min="0.15" max="0.5" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>ผิวพื้นลาด (%)</span><input name="crossfall" type="number" min="0" max="5" step="0.5" inputmode="decimal"></label>
+          <label class="field"><span>กันหินห่างศูนย์ราง (ม.)</span><input name="retOffset" type="number" min="0.8" max="2.5" step="0.05" inputmode="decimal"><small>วัดถึงผิวด้านราง</small></label>
+          <label class="field"><span>กันหินหนา (ม.)</span><input name="retThick" type="number" min="0.1" max="0.5" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>กันหิน A สูง (ม.)</span><input name="retHeightA" type="number" min="0.2" max="1.5" step="0.005" inputmode="decimal"><small>ระหว่างทาง</small></label>
+          <label class="field"><span>กันหิน B สูง (ม.)</span><input name="retHeightB" type="number" min="0.2" max="1.5" step="0.005" inputmode="decimal"><small>ข้างรางสาย</small></label>
+          <label class="field"><span>รางสาย กว้าง × ลึก (ม.)</span><span class="row2"><input name="troughWidth" type="number" min="0.3" max="2.5" step="0.01" inputmode="decimal" aria-label="ความกว้างรางสาย"><input name="troughDepth" type="number" min="0.1" max="1" step="0.01" inputmode="decimal" aria-label="ความลึกรางสาย"></span></label>
+          <label class="field"><span>ฝาราง / หินโรยทาง หนา (ม.)</span><span class="row2"><input name="coverThick" type="number" min="0.04" max="0.2" step="0.01" inputmode="decimal" aria-label="ความหนาฝาราง"><input name="ballastDepth" type="number" min="0.2" max="1" step="0.05" inputmode="decimal" aria-label="ความหนาหินโรยทางใต้ศูนย์กลางราง"></span></label>
+        </div>
+        <label class="check">
+          <input type="checkbox" name="handrail">
+          <span>ราวท่อเหล็กบนขอบนอก</span>
+        </label>
+        <div class="grid2" id="handrail-fields">
+          <label class="field"><span>ราวสูง (ม.)</span><input name="handrailHeight" type="number" min="0.6" max="2" step="0.05" inputmode="decimal"><small>จากยอดขอบนอก</small></label>
+          <label class="field"><span>ระยะเสา S1 (ม.)</span><input name="postSpacing" type="number" min="0.8" max="3" step="0.0001" inputmode="decimal"></label>
+          <label class="field"><span>เสาแรกห่างตอม่อ a (ม.)</span><input name="postEnd" type="number" min="0" max="1.5" step="0.05" inputmode="decimal"></label>
+          <label class="field"><span>ช่องต่อแผง</span><input name="panelBays" type="number" min="1" max="10" step="1" inputmode="numeric"></label>
+        </div>
       </div>
 
       <fieldset class="group" data-kinds="steel">
@@ -196,6 +282,11 @@
           <label><input type="radio" name="floorType" value="open"><span>โครงเหล็ก + หมอน</span></label>
         </div>
       </fieldset>
+
+      <label class="check" id="bsleeper-field">
+        <input type="checkbox" name="ballastSleepers">
+        <span>หมอนคอนกรีตบนหินโรยทาง</span>
+      </label>
 
       <div class="type-fields" id="open-fields" hidden>
         <div class="field">
@@ -216,7 +307,7 @@
             </span>
           </label>
         </div>
-        <label class="check">
+        <label class="check" id="walkway-field">
           <input type="checkbox" name="walkway">
           <span>ทางเดินตรวจสภาพ (ตะแกรงเหล็กข้างราง)</span>
         </label>
@@ -278,7 +369,7 @@
         <small id="hint-spantext">ว่าง = ความยาว span × จำนวน span · ช่วงไม่เท่ากันใช้ + คั่น (เหมือนช่อง Span ใน KML)</small>
       </label>
 
-      <fieldset class="group">
+      <fieldset class="group" id="railing-group">
         <legend>ราวสะพาน</legend>
         <div class="grid2">
           <label class="field">

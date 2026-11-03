@@ -80,8 +80,88 @@ const DEFAULTS = Object.freeze({
   // ── v3: Overpass ──
   levels: {},           // ระดับพื้นรายต้น { "1": 4.5, "3": 7.2 } ต้นที่ไม่ระบุประมาณค่าเชิงเส้น
   lanes: 2,             // จำนวนช่องจราจร (เส้นแบ่งช่อง)
-  maxGrade: 6           // ความชันสูงสุดที่ยอมรับ (%) เกินแล้วเตือน
+  maxGrade: 6,          // ความชันสูงสุดที่ยอมรับ (%) เกินแล้วเตือน
+  // ── v3.1: สะพานคอนกรีตตามแบบโครงการ (JVBP Slab span 15/20/25/30 ม.) ──
+  preset: 'none',       // แบบมาตรฐาน: none | auto (เลือกตามความยาวแต่ละช่วง) | cb15 | cb20 | cb25 | cb30
+  girderList: '',       // ตำแหน่งคาน I จากศูนย์กลาง (ม.) เช่น "±1.3, ±3.7" — ว่าง = ใช้จำนวนคาน
+  webThick: 0,          // หน้าตัดคาน I ละเอียด (ม.) 0 = คำนวณให้: ความหนาเอว
+  topFlangeT: 0,        //   ความหนาปีกบน
+  topTaper: 0,          //   ส่วนผายใต้ปีกบน
+  botFlangeT: 0,        //   ความหนาปีกล่าง
+  botTaper: 0,          //   ส่วนผายเหนือปีกล่าง
+  bottomWidth: 0,       //   ความกว้างปีกล่าง
+  diaphragmList: '',    // คานขวางกลางช่วงแบบกำหนดตำแหน่ง (ม. จากปลายคาน ตามแนวศูนย์กลาง) ใช้เมื่อ diaphragm = list
+  diaphragmThick: 0,    // ความหนาคานขวางกลางช่วง (ม.) 0 = คอนกรีต 0.25 / เหล็ก 0.05
+  endDiaphragm: false,  // คานขวางปลายเต็มความลึก (เฉียงตามแนวตอม่อ)
+  endDiaphragmThick: 0.6,
+  endGap: 0.05,         // ระยะปลายคานถึงแนวศูนย์กลางตอม่อ (ม.)
+  deckSection: 'simple',// simple = แผ่นพื้นเรียบ + ราว · trough = พื้นลาด + กันหินโรยทาง + รางสายเคเบิลข้าง + ราวท่อ
+  slabEdge: 0.20,       // trough: ความหนาแผ่นพื้นที่ขอบ (ม.)
+  crossfall: 2,         // trough: ผิวพื้นลาดจากกึ่งกลางออกสองข้าง (%)
+  retOffset: 1.40,      // trough: ผิวกันหินด้านรางห่างศูนย์กลางราง (ม.)
+  retThick: 0.20,       // trough: ความหนากันหิน (ม.)
+  retHeightA: 0.67,     // trough: ความสูงกันหิน A (ระหว่างทาง) (ม.)
+  retHeightB: 0.745,    // trough: ความสูงกันหิน B (ข้างรางเคเบิล) (ม.)
+  troughWidth: 1.13,    // trough: ความกว้างภายในรางสาย (ม.)
+  troughDepth: 0.27,    // trough: ความลึกรางสาย (ม.)
+  coverThick: 0.08,     // trough: ความหนาฝาคอนกรีต (ม.)
+  ballastDepth: 0.50,   // trough: ความหนาหินโรยทางใต้ศูนย์กลางราง (ม.)
+  handrail: false,      // trough: ราวท่อเหล็กบนขอบนอก
+  handrailHeight: 1.0,  // ความสูงราวจากยอดขอบนอก (ม.)
+  postSpacing: 1.215,   // ระยะเสาราว S1 (ม.)
+  postEnd: 0.40,        // ระยะแนวตอม่อถึงเสาแรก a (ม.)
+  panelBays: 4,         // จำนวนช่องต่อแผงราว (รอยต่อแผง = เสาคู่ห่าง 0.30 ม.)
+  // ── v3.2 ──
+  endBlock: 0,          // ปลายคาน I ทึบ (ม.) 0 = ไม่มี · แบบโครงการ 2.95
+  endTaper: 0,          // ช่วงสอบจากปลายทึบเป็นรูป I (ม.) · แบบโครงการ 1.00
+  bearingDetail: false, // แผ่นยางรองคานบนแท่นคอนกรีต แถวละช่วง (ตำแหน่งตามปลายคาน)
+  restrainBlocks: false,// บล็อกกันเลื่อนระหว่างคานบนตอม่อ
+  ballastSleepers: false// หมอนคอนกรีตบนหินโรยทาง (ใช้ระยะ/ขนาดหมอนชุดเดียวกับพื้นโครงเหล็ก)
 });
+
+/* แบบมาตรฐานสะพานคอนกรีตของโครงการ (JVBP/CSBN1/SC1/CB)
+   ส่วนที่เหมือนกันทุกช่วง: พื้น 11.00 ม. · คาน I ปีก 0.60 เอว 0.20 · กันหิน A 0.67 / B 0.745 · รางสาย 1.13 × 0.27 ฝา 0.08 · ราวท่อสูง 1.00 */
+const CB_COMMON = Object.freeze({
+  bridgeKind: 'concrete', girderType: 'igirder', deckSection: 'trough', deckWidth: 11, tracks: 2, trackSpacing: 5,
+  girderWidth: 0.6, bottomWidth: 0.6, webThick: 0.2, topFlangeT: 0.15, topTaper: 0.15, botFlangeT: 0.25, botTaper: 0.15,
+  edgeGirder: 'i', diaphragm: 'list', diaphragmThick: 0.2, endDiaphragm: true, endDiaphragmThick: 0.6, endGap: 0.04,
+  slabEdge: 0.2, crossfall: 2, retOffset: 1.4, retThick: 0.2, retHeightA: 0.67, retHeightB: 0.745,
+  troughWidth: 1.13, troughDepth: 0.27, coverThick: 0.08, ballastDepth: 0.5,
+  railings: '0', handrail: true, handrailHeight: 1.0, postEnd: 0.4, panelBays: 4,
+  endBlock: 2.95, endTaper: 1.0, bearingDetail: true, restrainBlocks: true,
+  ballastSleepers: true, sleeperSpacing: 0.6, sleeperLength: 2.0, sleeperWidth: 0.26, sleeperHeight: 0.21
+});
+const CB_PRESETS = Object.freeze({
+  cb15: { span: 15, label: 'Slab span 15 ม. (DWG 0066)', girderList: '±1.3, ±3.7', girderDepth: 1.5, diaphragmList: '4, 7.5, 11', postSpacing: 1.2417 },
+  cb20: { span: 20, label: 'Slab span 20 ม. (DWG 006)', girderList: '±1.3, ±2.5, ±3.7', girderDepth: 1.5, diaphragmList: '5.135, 9.96, 14.785', postSpacing: 1.225 },
+  cb25: { span: 25, label: 'Slab span 25 ม. (DWG 0093)', girderList: '±0.899, ±1.966, ±3.033, ±4.1', girderDepth: 1.5, diaphragmList: '4.96, 9.96, 14.96, 19.96', postSpacing: 1.215 },
+  cb30: { span: 30, label: 'Slab span 30 ม. (DWG 0029)', girderList: '±0.899, ±1.966, ±3.033, ±4.1', girderDepth: 1.7, diaphragmList: '4.95, 9.95, 14.95, 19.95, 24.95', postSpacing: 1.465 }
+});
+
+// แบบมาตรฐานของช่วงยาว L: preset ชื่อแบบ หรือ auto = แบบที่ช่วงใกล้ที่สุด (ต่างไม่เกิน 1.5 ม.) → ชื่อแบบ | null
+function presetFor(p, L) {
+  if (CB_PRESETS[p.preset]) return p.preset;
+  if (p.preset !== 'auto') return null;
+  let best = null, dist = 1.5;
+  for (const [k, v] of Object.entries(CB_PRESETS)) if (Math.abs(v.span - L) <= dist) { best = k; dist = Math.abs(v.span - L); }
+  return best;
+}
+
+// ค่าของแบบมาตรฐาน (ไม่รวม span/label) — หน้าออกแบบใช้กรอกฟอร์ม
+function presetParams(name) {
+  const v = CB_PRESETS[name];
+  if (!v) return null;
+  const { span, label, ...rest } = v;
+  return { ...CB_COMMON, ...rest, spanLength: span };
+}
+
+// ใช้แบบมาตรฐานกับพารามิเตอร์ของช่วงยาว L (ค่าแบบทับค่าที่กรอก)
+function applyPreset(p, L) {
+  const name = presetFor(p, L);
+  if (!name) return p;
+  const { span, label, ...rest } = CB_PRESETS[name];
+  return Object.assign({}, p, CB_COMMON, rest, { preset: p.preset, presetUsed: name });
+}
 
 // ค่าตั้งต้นของแต่ละแท็บ (ใช้เมื่อเริ่มแท็บใหม่ — ค่าที่ส่งมาทับค่านี้)
 const KIND_DEFAULTS = Object.freeze({
@@ -118,7 +198,13 @@ const LIMITS = Object.freeze({
   sleeperWidth: [0.15, 0.4],
   sleeperHeight: [0.1, 0.3],
   lanes: [0, 6],
-  maxGrade: [1, 15]
+  maxGrade: [1, 15],
+  webThick: [0, 1], topFlangeT: [0, 0.6], topTaper: [0, 0.6], botFlangeT: [0, 0.8], botTaper: [0, 0.6], bottomWidth: [0, 2.5],
+  diaphragmThick: [0, 1], endDiaphragmThick: [0.2, 1.5], endGap: [0, 0.5],
+  slabEdge: [0.15, 0.5], crossfall: [0, 5], retOffset: [0.8, 2.5], retThick: [0.1, 0.5], retHeightA: [0.2, 1.5], retHeightB: [0.2, 1.5],
+  troughWidth: [0.3, 2.5], troughDepth: [0.1, 1], coverThick: [0.04, 0.2], ballastDepth: [0.2, 1],
+  handrailHeight: [0.6, 2], postSpacing: [0.8, 3], postEnd: [0, 1.5], panelBays: [1, 10],
+  endBlock: [0, 6], endTaper: [0, 3]
 });
 
 const PRESETS = Object.freeze({
@@ -178,10 +264,20 @@ function normalizeParams(input = {}) {
   p.railingList = String(p.railingList || '').trim().slice(0, 120);
   p.railingStyle = p.railingStyle === 'steel' ? 'steel' : 'wall';
   p.edgeGirder = p.edgeGirder === 'solid' ? 'solid' : 'i';
-  p.diaphragm = ['none', 'ends', 'mid', 'third', 'spacing'].includes(p.diaphragm) ? p.diaphragm : 'mid';
+  p.diaphragm = ['none', 'ends', 'mid', 'third', 'spacing', 'list'].includes(p.diaphragm) ? p.diaphragm : 'mid';
   p.floorType = kind === 'steel' && p.floorType === 'open' ? 'open' : 'concrete';
   p.walkway = input.walkway === undefined ? DEFAULTS.walkway : truthy(input.walkway);
   p.levels = kind === 'overpass' ? normalizeLevels(p.levels) : {};
+  // v3.1
+  p.preset = kind === 'concrete' && (CB_PRESETS[p.preset] || p.preset === 'auto') ? p.preset : 'none';
+  p.girderList = String(p.girderList || '').trim().slice(0, 120);
+  p.diaphragmList = String(p.diaphragmList || '').trim().slice(0, 120);
+  p.endDiaphragm = input.endDiaphragm === undefined ? DEFAULTS.endDiaphragm : truthy(input.endDiaphragm);
+  p.handrail = input.handrail === undefined ? DEFAULTS.handrail : truthy(input.handrail);
+  p.deckSection = p.deckSection === 'trough' && p.girderType === 'igirder' && kind !== 'overpass' ? 'trough' : 'simple';
+  p.panelBays = Math.round(p.panelBays);
+  for (const k of ['bearingDetail', 'restrainBlocks', 'ballastSleepers']) p[k] = input[k] === undefined ? DEFAULTS[k] : truthy(input[k]);
+  delete p.presetUsed;
   p.version = 3;
   return p;
 }
@@ -271,15 +367,79 @@ function iGirderSection(p, h, steel) {
     const tf = r2(clamp(h * 0.03, 0.04, 0.08));
     return { h, bf, bb: bf, tw: 0.04, tf, ta: 0, bt: tf, tb: 0, steel: true };
   }
-  return {
+  // ค่าละเอียดที่กรอก (> 0) ทับค่าคำนวณ · รวมความหนาปีก+ส่วนผายต้องเหลือเอวอย่างน้อย 0.1 ม.
+  const pick = (v, auto) => (v > 0 ? v : auto);
+  const sec = {
     h, bf,
-    bb: r2(Math.max(0.5, bf * 0.75)),
-    tw: r2(clamp(bf * 0.2, 0.16, 0.25)),
-    tf: r2(clamp(h * 0.1, 0.12, 0.2)),
-    ta: r2(clamp(h * 0.06, 0.05, 0.15)),
-    bt: r2(clamp(h * 0.14, 0.15, 0.3)),
-    tb: r2(clamp(h * 0.1, 0.1, 0.25)),
+    bb: r2(pick(p.bottomWidth, Math.max(0.5, bf * 0.75))),
+    tw: r2(pick(p.webThick, clamp(bf * 0.2, 0.16, 0.25))),
+    tf: r2(pick(p.topFlangeT, clamp(h * 0.1, 0.12, 0.2))),
+    ta: r2(pick(p.topTaper, clamp(h * 0.06, 0.05, 0.15))),
+    bt: r2(pick(p.botFlangeT, clamp(h * 0.14, 0.15, 0.3))),
+    tb: r2(pick(p.botTaper, clamp(h * 0.1, 0.1, 0.25))),
     steel: false
+  };
+  const over = sec.tf + sec.ta + sec.bt + sec.tb - (h - 0.1);
+  if (over > 0) { const k = (h - 0.1) / (sec.tf + sec.ta + sec.bt + sec.tb); for (const key of ['tf', 'ta', 'bt', 'tb']) sec[key] = r2(sec[key] * k); }
+  sec.tw = Math.min(sec.tw, sec.bf, sec.bb);
+  return sec;
+}
+
+// "±1.3, ±3.7" / "-3.7, -1.3, 1.3, 3.7" → [-3.7, -1.3, 1.3, 3.7]
+function parseOffsets(text) {
+  const out = [];
+  for (const part of String(text || '').split(/[,;\s]+/)) {
+    const m = part.match(/^(±|\+-|\+\/-)?(-?\d+(?:\.\d+)?)$/);
+    if (!m) continue;
+    const v = Number(m[2]);
+    if (m[1]) out.push(-Math.abs(v), Math.abs(v)); else out.push(v);
+  }
+  return [...new Set(out.map(r2))].sort((a, b) => a - b);
+}
+
+/* หน้าตัดพื้นแบบมีกันหินโรยทาง + รางสายเคเบิล (deckSection = trough)
+   คืนรายการรูปหลายเหลี่ยม { part, pts:[[z, y]] } y อ้างอิงผิวพื้นที่กึ่งกลางสะพาน = 0 (ใช้ทั้ง 3D และภาพหน้าตัด)
+   + ค่าประกอบ: ใต้แผ่นพื้น ระดับหลังหิน ตำแหน่งราว ฝาราง */
+function troughSection(p, W, trackCenters) {
+  const h = W / 2;
+  const s = p.crossfall / 100;
+  const t = p.retThick;
+  const outerZ = trackCenters.length ? Math.max(...trackCenters.map(Math.abs)) : 0;
+  const zs = trackCenters.length ? outerZ + p.retOffset + t : Math.max(0.5, h - p.troughWidth - 0.3);   // ผิวนอกกันหิน B
+  const yf = -s * zs;                         // ระดับผิวพื้นช่วงราบ (ใต้รางสาย)
+  const yb = yf - p.slabEdge;                 // ใต้แผ่นพื้น
+  const top = (z) => -s * Math.min(Math.abs(z), zs);
+  const parts = [];
+  parts.push({ part: 'slab', pts: [[-h, yb], [h, yb], [h, yf], [zs, yf], [0, 0], [-zs, yf], [-h, yf]] });
+  const wall = (z0, z1, hgt, part) => {
+    const yt = top(Math.abs(z0) < Math.abs(z1) ? z0 : z1) + hgt;
+    parts.push({ part, pts: [[z0, top(z0)], [z1, top(z1)], [z1, yt], [z0, yt]] });
+  };
+  const ballast = [];
+  for (const zc of trackCenters) {
+    const zi = zc - p.retOffset, zo = zc + p.retOffset;     // ผิวกันหินด้านราง
+    for (const [face, dir] of [[zi, -1], [zo, 1]]) {
+      const outer = Math.abs(face) > Math.abs(zc);           // ด้านนอก = ข้างรางสาย (B)
+      const zA = face, zB = face + dir * t;
+      const isB = outer || trackCenters.length === 1;
+      wall(Math.min(zA, zB), Math.max(zA, zB), isB ? p.retHeightB : p.retHeightA, isB ? 'retainer-b' : 'retainer-a');
+    }
+    const yTop = top(zc) + p.ballastDepth;
+    ballast.push({ zc, yTop });
+    parts.push({ part: 'ballast', pts: [[zi, top(zi)], ...(Math.sign(zi) !== Math.sign(zo) ? [[0, 0]] : []), [zo, top(zo)], [zo, yTop], [zi, yTop]] });
+  }
+  // รางสาย: พื้นราง = ผิวพื้นช่วงราบ · ผนังนอก (footpath curb) ถึงขอบพื้น · ฝาวางเสมอยอดขอบนอก
+  const zt1 = zs + p.troughWidth;
+  const curbTop = yf + p.troughDepth + p.coverThick;
+  const curbW = h - zt1;
+  for (const sg of [-1, 1]) {
+    if (curbW > 0.02) parts.push({ part: 'curb', pts: [[sg * zt1, yf], [sg * h, yf], [sg * h, curbTop - 0.03], [sg * (h - 0.03), curbTop], [sg * zt1, curbTop]].map(([z, y]) => [z, y]) });
+  }
+  return {
+    parts, yb, yf, zs, zt1, curbTop, curbW,
+    coverY: curbTop - p.coverThick / 2,
+    ballast,
+    handrailZ: curbW > 0.02 ? h - Math.min(0.12, curbW / 2) : h - 0.05
   };
 }
 
@@ -294,13 +454,16 @@ function iGirderPoints(sec, solidSide = 0) {
 
 /* ---------- คำนวณขนาดชิ้นส่วนจากพารามิเตอร์ ---------- */
 function deriveDims(input) {
-  const p = normalizeParams(input);
-  const W = p.deckWidth;
+  let p = normalizeParams(input);
   const sp = spansOf(p);
   const errors = sp.errors;
   const warnings = sp.warnings;
   const spans = sp.spans;
   const L = Math.max(...spans);
+  // แบบมาตรฐาน (สะพานคอนกรีต): ค่าตามแบบของช่วงยาว L ทับค่าที่กรอก
+  p = applyPreset(p, L);
+  if (p.preset === 'auto' && !p.presetUsed) warnings.push(`ช่วง ${r1(L)} ม. ไม่มีแบบมาตรฐาน (มี 15 / 20 / 25 / 30 ม.) ใช้ค่าที่กรอก`);
+  const W = p.deckWidth;
   const kind = p.bridgeKind;
   const steel = kind === 'steel';
   const overpass = kind === 'overpass';
@@ -324,7 +487,14 @@ function deriveDims(input) {
     girderH = p.girderDepth > 0 ? p.girderDepth : r1(steel ? clamp(L / 15, 0.8, 3.5) : clamp(L / 17, 0.9, 2.4));
     iSec = iGirderSection(p, girderH, steel);
     const pairUnderTracks = open && p.girderCount === 0 && p.tracks > 0;
-    if (pairUnderTracks) {
+    const listed = parseOffsets(p.girderList).filter((z) => Math.abs(z) <= W / 2 - 0.2);
+    if (p.girderList && !listed.length) warnings.push(`ตำแหน่งคาน "${p.girderList}" อ่านไม่ได้ ใช้แบบ ±1.3, ±3.7 หรือ -3.7, -1.3, 1.3, 3.7`);
+    if (listed.length) {
+      girderZ = listed;
+      for (let k = 1; k < listed.length; k++) {
+        if (listed[k] - listed[k - 1] < Math.max(iSec.bf, iSec.bb) + 0.05) { warnings.push(`คานที่ ${r2(listed[k - 1])} กับ ${r2(listed[k])} ม. ชิดกันเกินไป`); break; }
+      }
+    } else if (pairUnderTracks) {
       // พื้นโครงเหล็กบนคาน I: คานคู่ใต้รางแต่ละทาง หมอนวางบนคานโดยตรง
       const s = p.gauge > 1.2 ? 2.0 : 1.8;
       const centers = p.tracks === 2 ? [-p.trackSpacing / 2, p.trackSpacing / 2] : [0];
@@ -341,8 +511,12 @@ function deriveDims(input) {
   }
 
   // ความลึกโครงสร้างส่วนบน: คานกล่อง ≈ span/18 · คาน I + แผ่นพื้น · โครงเหล็ก = ระบบพื้น 1.6 ม.
+  const trackCenters = p.tracks === 2 ? [-p.trackSpacing / 2, p.trackSpacing / 2] : p.tracks === 1 ? [0] : [];
+  const trough = ig && p.deckSection === 'trough' ? troughSection(p, W, trackCenters) : null;
+  if (trough && trough.curbW < 0.15) warnings.push(`พื้นกว้าง ${W} ม. ไม่พอสำหรับรางสาย ${p.troughWidth} ม. (ขอบนอกเหลือ ${r2(trough.curbW)} ม.)`);
+  const slabT = trough ? -trough.yb : p.slabThick;    // ผิวพื้นที่กึ่งกลางถึงใต้แผ่นพื้น
   const superDepth = truss ? 1.6
-    : ig ? r2(girderH + (open ? 0 : p.slabThick))
+    : ig ? r2(girderH + (open ? 0 : slabT))
     : (p.girderDepth > 0 ? p.girderDepth : r1(clamp(L / 18, 1.2, 4)));
   const bearing = 0.15; // แผ่นรองคาน
   const capTopY = DL - superDepth - bearing;
@@ -437,14 +611,14 @@ function deriveDims(input) {
   if (!truss && !steel && L > 45 && p.girderDepth === 0) warnings.push('span ยาวเกิน 45 ม. สำหรับคานคอนกรีต ลองพิจารณาสะพานเหล็ก');
   if (steel && ig && L > 60) warnings.push(`คานเหล็ก I ช่วง ${r1(L)} ม. ยาวมาก ช่วงยาวกว่า 60 ม. มักใช้โครงถัก`);
 
-  const trackCenters = p.tracks === 2 ? [-p.trackSpacing / 2, p.trackSpacing / 2] : p.tracks === 1 ? [0] : [];
   const sleeperLength = p.sleeperLength;
 
   // ราวสะพาน: ตำแหน่ง z ของแต่ละแนว (ศูนย์กลางราว)
   const rimIn = p.railingStyle === 'wall' ? 0.1 : 0.05;
   const edge = W / 2 - rimIn;
   let railZ = [];
-  if (p.railings === '2') railZ = [-edge, edge];
+  if (trough) railZ = [];                             // พื้นแบบรางสาย: ราวท่อบนขอบนอกแทน
+  else if (p.railings === '2') railZ = [-edge, edge];
   else if (p.railings === '3') railZ = [-edge, 0, edge];
   else if (p.railings === '4') {
     const zi = Math.max(0.2, W / 2 - p.railingInset);
@@ -479,7 +653,7 @@ function deriveDims(input) {
     wallWidth, wallRadius,
     clearWidth: p.pierType === 'C' ? colSpacing - colD : 0,
     columnHeight, trussHeight, trussZ, trussBottomY,
-    iSec, girderZ, girderH,
+    iSec, girderZ, girderH, trough, slabT, presetUsed: p.presetUsed || null,
     railZ, railBaseY: DL + (open ? p.sleeperHeight : overpass ? 0.05 : 0),
     trackCenters,
     spans, skew, skewRad: skew * Math.PI / 180,
@@ -546,11 +720,29 @@ function member(a, b, size, mat, name) {
 
 /* กล่องจำนวนมากรวมเป็นชิ้นเดียว (หมอน ราวเหล็ก คานขวาง เส้นจราจร) — ประหยัด draw call ส่งออก .glb ได้ตรง
    items = [{ x, y, z, sx, sy, sz }] กึ่งกลางกล่องและขนาด แกนตรง */
-function mergedBoxes(items, mat, name) {
+function mergedBoxes(items, mat, name) { return mergedScaled(UNIT_BOX, items, mat, name); }
+
+// ท่อกลม (ราวท่อเหล็ก): items = [{ x, y, z, r, len, axis: 'x' | 'y' }]
+const UNIT_CYL_Y = new THREE.CylinderGeometry(1, 1, 1, 10, 1);
+const UNIT_CYL_X = new THREE.CylinderGeometry(1, 1, 1, 10, 1).rotateZ(Math.PI / 2);
+UNIT_CYL_Y.userData.shared = UNIT_CYL_X.userData.shared = true;
+function mergedPipes(items, mat, name) {
+  const ys = items.filter((t) => t.axis !== 'x').map((t) => ({ x: t.x, y: t.y, z: t.z, sx: t.r, sy: t.len, sz: t.r }));
+  const xs = items.filter((t) => t.axis === 'x').map((t) => ({ x: t.x, y: t.y, z: t.z, sx: t.len, sy: t.r, sz: t.r }));
+  const g = new THREE.Group();
+  g.name = name;
+  const a = mergedScaled(UNIT_CYL_Y, ys, mat, `${name}-post`);
+  const b = mergedScaled(UNIT_CYL_X, xs, mat, `${name}-rail`);
+  if (a) g.add(a);
+  if (b) g.add(b);
+  return g;
+}
+
+function mergedScaled(base, items, mat, name) {
   if (!items.length) return null;
-  const bp = UNIT_BOX.attributes.position.array;
-  const bn = UNIT_BOX.attributes.normal.array;
-  const bi = UNIT_BOX.index.array;
+  const bp = base.attributes.position.array;
+  const bn = base.attributes.normal.array;
+  const bi = base.index.array;
   const nv = bp.length / 3;
   const pos = new Float32Array(items.length * nv * 3);
   const nor = new Float32Array(items.length * nv * 3);
@@ -581,6 +773,43 @@ function extrudeAlongX(pts, len) {
   const geo = new THREE.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
   geo.rotateY(Math.PI / 2);
   return geo;
+}
+
+/* v3.2: คาน I ที่ปลายทึบ — หน้าตัดทึบ (เอวกว้างเท่าปีก) ยาว eb จากปลาย แล้วสอบเป็นรูป I ในระยะ et
+   ใช้จุดหน้าตัดชุดเดียวกัน (I กับ ทึบ มีจำนวนจุดเท่ากัน) ต่อเป็นผิวตามความยาว ตั้งแต่ x = 0 ถึง len */
+function girderLoft(sec, solidSide, len, eb, et) {
+  const iPts = iGirderPoints(sec, solidSide);
+  const ext = Math.max(sec.bf, sec.bb) / 2;
+  const sPts = iPts.map(([z, y]) => [Math.sign(z) * ext, y]);
+  const k = Math.min(1, (len / 2 - 0.1) / Math.max(0.01, eb + et));
+  const a = eb * k, b = (eb + et) * k;
+  const stations = [[0, sPts], [a, sPts], [b, iPts], [len - b, iPts], [len - a, sPts], [len, sPts]];
+  const n = iPts.length;
+  const pos = [];
+  const V = (x, [z, y]) => pos.push(x, y, z);
+  for (let st = 0; st < stations.length - 1; st++) {
+    const [x0, P0] = stations[st], [x1, P1] = stations[st + 1];
+    if (x1 - x0 < 1e-6) continue;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      // จุดเรียงตามเข็มนาฬิกาเมื่อมองจาก +x → หน้าหันออกด้านนอก
+      V(x0, P0[i]); V(x1, P1[i]); V(x1, P1[j]);
+      V(x0, P0[i]); V(x1, P1[j]); V(x0, P0[j]);
+    }
+  }
+  // ฝาปลายสองข้าง (หน้าตัดทึบ)
+  const contour = sPts.map(([z, y]) => new THREE.Vector2(z, y));
+  const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+  const cw = THREE.ShapeUtils.isClockWise(contour);
+  for (const [i, j, l] of tris) {
+    const t = cw ? [i, j, l] : [i, l, j];
+    V(0, sPts[t[0]]); V(0, sPts[t[1]]); V(0, sPts[t[2]]);
+    V(len, sPts[t[0]]); V(len, sPts[t[2]]); V(len, sPts[t[1]]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
 }
 
 /* ---------- ทรงตันหน้าตัดสี่เหลี่ยมมุมมน ที่ความกว้างเปลี่ยนตามความสูงได้ ----------
@@ -696,16 +925,18 @@ function makeKit(d) {
     s.lineTo(-bt, -0.45);
     s.lineTo(-W / 2, -0.25);
     s.closePath();
-    kit.girderGeo = new THREE.ExtrudeGeometry(s, { depth: d.L - SPAN_GAP, bevelEnabled: false });
+    kit.girderGeo = new THREE.ExtrudeGeometry(s, { depth: d.L - 2 * d.params.endGap, bevelEnabled: false });
     kit.girderGeo.rotateY(Math.PI / 2);
   }
   if (d.ig) {
     // คาน I: ตัวกลางเว้าเอวสองด้าน · คานริมด้านนอกทึบได้ (edgeGirder = solid)
-    const len = d.L - SPAN_GAP;
-    kit.iGeo = extrudeAlongX(iGirderPoints(d.iSec, 0), len);
+    const len = d.L - 2 * d.params.endGap;
+    const eb = d.steel ? 0 : d.params.endBlock, et = d.steel ? 0 : d.params.endTaper;
+    const mk = (side) => (eb + et > 0 ? girderLoft(d.iSec, side, len, eb, et) : extrudeAlongX(iGirderPoints(d.iSec, side), len));
+    kit.iGeo = mk(0);
     if (d.params.edgeGirder === 'solid') {
-      kit.iGeoL = extrudeAlongX(iGirderPoints(d.iSec, -1), len);
-      kit.iGeoR = extrudeAlongX(iGirderPoints(d.iSec, 1), len);
+      kit.iGeoL = mk(-1);
+      kit.iGeoR = mk(1);
     }
   }
   kit.padZ = d.padZ;
@@ -758,10 +989,29 @@ function buildPier(d, kit) {
     g.add(cap);
   }
 
-  for (const z of kit.padZ) {
-    const pad = box(0.9, d.bearing, d.padSize || 0.9, MATERIALS.pad, 'bearing');
-    pad.position.set(0, d.capTopY + d.bearing / 2, z);
-    g.add(pad);
+  if (kit.pads) {
+    // v3.2: แท่นคอนกรีต + แผ่นยางรองคาน ใต้ปลายคานแต่ละตัว (ตำแหน่งในกรอบตอม่อ)
+    const ped = [], rub = [];
+    const tp = 0.06, hp = d.bearing - tp;
+    for (const { x, z } of kit.pads) {
+      ped.push({ x, y: d.capTopY + hp / 2, z, sx: 0.7, sy: hp, sz: 0.8 });
+      rub.push({ x, y: d.capTopY + hp + tp / 2, z, sx: 0.4, sy: tp, sz: 0.5 });
+    }
+    const pm = mergedBoxes(ped, MATERIALS.pier, 'bearing-pedestal');
+    if (pm) g.add(pm);
+    const rm = mergedBoxes(rub, MATERIALS.pad, 'bearing');
+    if (rm) g.add(rm);
+  } else {
+    for (const z of kit.padZ) {
+      const pad = box(0.9, d.bearing, d.padSize || 0.9, MATERIALS.pad, 'bearing');
+      pad.position.set(0, d.capTopY + d.bearing / 2, z);
+      g.add(pad);
+    }
+  }
+  if (kit.blocks && kit.blocks.length) {
+    // บล็อกกันเลื่อนระหว่างคาน: จากหัวตอม่อขึ้นไปเหนือท้องคาน 0.6 ม.
+    const hb = d.bearing + 0.6;
+    g.add(mergedBoxes(kit.blocks.map((z) => ({ x: 0, y: d.capTopY + hb / 2, z, sx: 0.3, sy: hb, sz: 0.25 })), MATERIALS.pier, 'restrain-block'));
   }
   return g;
 }
@@ -772,6 +1022,35 @@ function addTracks(g, d, x0, len) {
   const p = d.params;
   const y = p.deckLevel;
   const half = p.gauge / 2 + 0.035;
+  if (d.trough || (p.ballastSleepers && !d.open)) {
+    // หินโรยทาง: เป็นส่วนหนึ่งของหน้าตัดพื้น (trough) หรือกล่องหนา 0.3 ม. (พื้นเรียบ)
+    // หมอนคอนกรีต (ballastSleepers): ฝังในหินให้โผล่ 5 ซม. รางวางบนหมอน · ไม่มีหมอน: รางวางบนหลังหิน
+    const tops = d.trough ? d.trough.ballast.map((b) => ({ zc: b.zc, yTop: b.yTop }))
+      : d.trackCenters.map((zc) => ({ zc, yTop: 0.3 }));
+    if (!d.trough) for (const t of tops) {
+      const ballast = box(len, 0.3, 3.0, MATERIALS.ballast, 'ballast');
+      ballast.position.set(x0 + len / 2, y + 0.15, t.zc);
+      g.add(ballast);
+    }
+    const rails = [], sleepers = [];
+    const sh = p.sleeperHeight, sw = p.sleeperWidth, sl = p.sleeperLength;
+    const n = Math.max(1, Math.floor((len - sw) / p.sleeperSpacing) + 1);
+    const x1 = x0 + (len - (n - 1) * p.sleeperSpacing) / 2;
+    for (const t of tops) {
+      let railY = y + t.yTop + 0.08;
+      if (p.ballastSleepers) {
+        const sTop = y + t.yTop + 0.05;
+        for (let i = 0; i < n; i++) sleepers.push({ x: x1 + i * p.sleeperSpacing, y: sTop - sh / 2, z: t.zc, sx: sw, sy: sh, sz: sl });
+        railY = sTop + 0.08;
+      }
+      for (const side of [-half, half]) rails.push({ x: x0 + len / 2, y: railY, z: t.zc + side, sx: len, sy: 0.16, sz: 0.07 });
+    }
+    const sm = mergedBoxes(sleepers, MATERIALS.deck, 'concrete-sleepers');
+    if (sm) g.add(sm);
+    const rm = mergedBoxes(rails, MATERIALS.rail, 'rail');
+    if (rm) g.add(rm);
+    return;
+  }
   if (!d.open) {
     for (const zc of d.trackCenters) {
       const ballast = box(len, 0.3, 3.0, MATERIALS.ballast, 'ballast');
@@ -870,6 +1149,7 @@ function addRoad(g, d, x0, len) {
 function diaphragmXs(p, len) {
   const e = 0.3;
   switch (p.diaphragm) {
+    case 'list': return parseOffsets(p.diaphragmList).filter((x) => x > 0.2 && x < len - 0.2);
     case 'none': return [];
     case 'ends': return [e, len - e];
     case 'third': return [e, len / 3, (2 * len) / 3, len - e];
@@ -884,9 +1164,13 @@ function diaphragmXs(p, len) {
 function buildConcreteSpan(d, kit) {
   const g = new THREE.Group();
   const p = d.params;
-  const x0 = SPAN_GAP / 2;
-  const len = d.L - SPAN_GAP;
+  const x0 = p.endGap;
+  const len = d.L - 2 * p.endGap;
   const y = p.deckLevel;
+  // ชิ้นที่ตั้งฉากกับคานแม้สะพานเฉียง (คานขวางกลางช่วง) — bakeSpan ไม่เฉือนตามมุมเฉียง
+  const straight = new THREE.Group();
+  straight.name = 'perpendicular';
+  straight.userData.noShear = true;
 
   if (!d.ig) {
     const girder = new THREE.Mesh(kit.girderGeo, MATERIALS.deck);
@@ -895,8 +1179,26 @@ function buildConcreteSpan(d, kit) {
     g.add(girder);
   } else {
     const gMat = d.steel ? MATERIALS.steel : MATERIALS.deck;
-    const gTop = d.open ? y : y - p.slabThick;
-    if (!d.open) {
+    const gTop = d.open ? y : y - d.slabT;
+    if (d.trough) {
+      // พื้นตามแบบ: แผ่นพื้นลาด กันหิน A/B ผนังขอบนอก หินโรยทาง (หน้าตัดเดียวกับภาพหน้าตัด)
+      const mats = { slab: MATERIALS.deck, 'retainer-a': MATERIALS.deck, 'retainer-b': MATERIALS.deck, curb: MATERIALS.deck, ballast: MATERIALS.ballast };
+      for (const part of d.trough.parts) {
+        const m = new THREE.Mesh(extrudeAlongX(part.pts.map(([z, yy]) => [z, yy + y]), len), mats[part.part]);
+        m.name = part.part === 'slab' ? 'deck-slab' : part.part;
+        m.position.x = x0;
+        g.add(m);
+      }
+      // ฝารางสาย: แผ่นยาว 1 ม. เว้นร่อง 1 ซม.
+      const t = d.trough, covers = [];
+      const n = Math.max(1, Math.round(len));
+      const pl = len / n;
+      for (const sg of [-1, 1]) {
+        for (let i = 0; i < n; i++) covers.push({ x: x0 + pl * (i + 0.5), y: y + t.coverY, z: sg * (t.zs + t.zt1) / 2, sx: pl - 0.01, sy: p.coverThick, sz: t.zt1 - t.zs - 0.01 });
+      }
+      g.add(mergedBoxes(covers, MATERIALS.deck, 'trough-cover'));
+      if (p.handrail) g.add(buildHandrail(d));
+    } else if (!d.open) {
       const slab = box(len, p.slabThick, d.W, MATERIALS.deck, 'deck-slab');
       slab.position.set(x0 + len / 2, y - p.slabThick / 2, 0);
       g.add(slab);
@@ -911,23 +1213,76 @@ function buildConcreteSpan(d, kit) {
       gm.position.set(x0, gTop, z);
       g.add(gm);
     });
-    // คานขวาง: คอนกรีตหนา 0.25 ม. / เหล็กแผ่น 0.05 ม. ต่อเนื่องจากคานริมถึงคานริม
     if (zs.length > 1) {
       const s = d.iSec;
-      const dd = d.steel ? s.h * 0.6 : (s.h - s.tf) * 0.75;
-      const yc = gTop - s.tf - (d.steel ? 0.05 : 0.08) - dd / 2;
       const zc = (zs[0] + zs[zs.length - 1]) / 2;
       const zw = zs[zs.length - 1] - zs[0];
-      const items = diaphragmXs(p, len).map((x) => ({ x: x0 + x, y: yc, z: zc, sx: d.steel ? 0.05 : 0.25, sy: dd, sz: zw }));
-      const dm = mergedBoxes(items, gMat, 'diaphragm');
-      if (dm) g.add(dm);
+      // คานขวางกลางช่วง: คอนกรีตจากใต้แผ่นพื้นถึงเหนือปีกล่าง / เหล็กแผ่น · ตั้งฉากกับคาน
+      const th = p.diaphragmThick > 0 ? p.diaphragmThick : (d.steel ? 0.05 : 0.25);
+      const yTop = d.steel ? gTop - s.tf - 0.05 : gTop - (d.trough ? 0 : s.tf + 0.08);
+      const yBot = d.steel ? yTop - s.h * 0.6 : gTop - s.h + s.bt + s.tb;
+      const xs = diaphragmXs(p, len);
+      const isEnd = (x) => p.diaphragm !== 'list' && (x < 0.31 || x > len - 0.31);
+      const mid = xs.filter((x) => !isEnd(x)).map((x) => ({ x: x0 + x, y: (yTop + yBot) / 2, z: zc, sx: th, sy: yTop - yBot, sz: zw }));
+      const ends = xs.filter(isEnd).map((x) => ({ x: x0 + x, y: (yTop + yBot) / 2, z: zc, sx: th, sy: yTop - yBot, sz: zw }));
+      const dm = mergedBoxes(mid, gMat, 'diaphragm');
+      if (dm) straight.add(dm);
+      const de = mergedBoxes(ends, gMat, 'diaphragm');
+      if (de) g.add(de);
+      // คานขวางปลายเต็มความลึก (เฉียงตามแนวตอม่อ) · ศูนย์กลางห่างปลายคาน 0.325 ม. สำหรับหนา 0.60
+      if (p.endDiaphragm) {
+        const et = p.endDiaphragmThick;
+        const half = Math.max(s.bf, s.bb) / 2;
+        const ew = zw + 2 * half;
+        const items = [x0 + 0.025 + et / 2, x0 + len - 0.025 - et / 2].map((x) => ({ x, y: gTop - s.h / 2, z: zc, sx: et, sy: s.h, sz: ew }));
+        g.add(mergedBoxes(items, gMat, 'end-diaphragm'));
+      }
     }
   }
 
   if (d.overpass) addRoad(g, d, x0, len);
   addRailings(g, d, x0, len);
   addTracks(g, d, x0, len);
+  if (straight.children.length) g.add(straight);
   return g;
+}
+
+/* ---------- ราวท่อเหล็กบนขอบนอก (แบบ Section A-A) ----------
+   เสาและราวบน Ø60.5 · ราวล่าง/กลาง Ø48.6 ที่ 0.34 / 0.64 ม. · ราวบนที่ความสูงราว
+   แผงละ panelBays ช่อง ระยะเสา postSpacing (S1) · รอยต่อแผงเป็นเสาคู่ห่าง 0.30 ม. · เสาแรกห่างแนวตอม่อ postEnd (a)
+   ถ้า S1 ตามตารางยาวเกินช่วง จะลดระยะเสาให้พอดี */
+function handrailLayout(p, L) {
+  const a = p.postEnd, S1 = p.postSpacing, nb = p.panelBays, J = 0.3;
+  const avail = Math.max(1, L - 2 * a);
+  const n = Math.max(1, Math.round((avail + J) / (nb * S1 + J)));
+  const bay = Math.min(S1, (avail - J * (n - 1)) / (nb * n));
+  const total = n * nb * bay + J * (n - 1);
+  const start = (L - total) / 2;
+  const panels = [];
+  for (let k = 0; k < n; k++) {
+    const x = start + k * (nb * bay + J);
+    panels.push([x, x + nb * bay]);
+  }
+  return { panels, bay, n };
+}
+
+function buildHandrail(d) {
+  const p = d.params, t = d.trough;
+  const lay = handrailLayout(p, d.L);
+  const yb = p.deckLevel + t.curbTop;
+  const H = p.handrailHeight;
+  const rP = 0.03025, rR = 0.0243;
+  const items = [];
+  for (const sg of [-1, 1]) {
+    const z = sg * t.handrailZ;
+    for (const [xa, xb] of lay.panels) {
+      for (let i = 0; i <= p.panelBays; i++) items.push({ x: xa + ((xb - xa) * i) / p.panelBays, y: yb + H / 2, z, r: rP, len: H, axis: 'y' });
+      const len = xb - xa;
+      items.push({ x: (xa + xb) / 2, y: yb + H, z, r: rP, len: len + 0.1, axis: 'x' });
+      for (const hh of [0.34, 0.64].filter((v) => v < H - 0.1)) items.push({ x: (xa + xb) / 2, y: yb + hh, z, r: rR, len, axis: 'x' });
+    }
+  }
+  return mergedPipes(items, MATERIALS.steel, 'handrail');
 }
 
 /* ---------- ช่วงสะพานโครงเหล็ก (Warren truss แบบทางรถวิ่งด้านล่าง) ----------
@@ -1074,12 +1429,15 @@ function bakeSpan(span, skewRad = 0, slope = 0) {
   const out = new THREE.Group();
   out.name = span.name;
   out.userData = span.userData;
+  const S2 = new THREE.Matrix4().makeShear(slope, 0, 0, 0, 0, 0);   // ชิ้นตั้งฉาก: ลาดอย่างเดียว ไม่เฉือนตามมุมเฉียง
   const M = new THREE.Matrix4();
   span.traverse((o) => {
     if (!o.isMesh) return;
+    let straight = false;
+    for (let q = o.parent; q && q !== span; q = q.parent) if (q.userData && q.userData.noShear) straight = true;
     const g = o.geometry.clone();
     g.userData = {};
-    g.applyMatrix4(M.multiplyMatrices(S, o.matrixWorld));
+    g.applyMatrix4(M.multiplyMatrices(straight ? S2 : S, o.matrixWorld));
     const m = new THREE.Mesh(g, o.material);
     m.name = o.name;
     out.add(m);
@@ -1153,9 +1511,29 @@ function buildBridge(input) {
     d.warnings.forEach((w) => notes.push(`ตอม่อ ${i + 1}: ${w}`));
     const kit = makeKit(d);
     if (d.ig) {
-      const sd = spanDims[Math.min(i, n - 1)];
+      // แผ่นรองใต้คานทุกตัวของช่วงที่อยู่สองข้างตอม่อ (ตอม่อเฉียง: ระยะตามแนวตอม่อ = z ÷ cos)
       const c = Math.cos(skewRad);
-      kit.padZ = sd.girderZ.map((z) => z / c);
+      const zs = new Set([spanDims[i - 1], spanDims[i]].filter(Boolean).flatMap((sd) => sd.girderZ.map((z) => r2(z / c))));
+      kit.padZ = [...zs].sort((a, b) => a - b);
+      if (p.bearingDetail) {
+        // แผ่นรองใต้ปลายคาน: ห่างแนวตอม่อตามแนวคาน bx = endGap + 0.35 · แปลงเป็นกรอบตอม่อที่หมุนตามมุมเฉียง
+        const bx = p.endGap + 0.35, sn = Math.sin(skewRad);
+        kit.pads = [];
+        [[spanDims[i - 1], -1], [spanDims[i], 1]].forEach(([sd, sg]) => {
+          if (sd) sd.girderZ.forEach((z) => kit.pads.push({ x: sg * bx * c, z: z / c + sg * bx * sn }));
+        });
+      }
+      if (p.restrainBlocks) {
+        // ช่องระหว่างคาน (ยกเว้นช่องกลางสะพาน): ช่องแคบ = กึ่งกลาง · ช่องกว้างกว่า 1.5 ม. = ห่างคาน 0.6 ม. สองข้าง
+        const gz = (spanDims[i] || spanDims[i - 1]).girderZ;
+        kit.blocks = [];
+        for (let k = 1; k < gz.length; k++) {
+          const a = gz[k - 1], b = gz[k];
+          if (a < 0 && b > 0) continue;
+          if (b - a <= 1.5) kit.blocks.push((a + b) / 2); else kit.blocks.push(a + 0.6, b - 0.6);
+        }
+        kit.blocks = kit.blocks.map((z) => r2(z / c));
+      }
     }
     const pier = buildPier(d, kit);
     pier.name = `pier-${i + 1}`;
@@ -1211,7 +1589,11 @@ function findBridgeParams(obj) {
     buildPier, buildSpan, buildWingWalls, skewSpan, pierTypeAt, pierParams, spanParams, fitDeckLevel,
     buildBridge, disposeBridge, findBridgeParams,
     // v3
-    deckLevels, fitLevels, bakeSpan, iGirderSection, iGirderPoints, normalizeLevels
+    deckLevels, fitLevels, bakeSpan, iGirderSection, iGirderPoints, normalizeLevels,
+    // v3.1
+    CB_PRESETS, presetFor, presetParams, applyPreset, parseOffsets, troughSection, handrailLayout,
+    // v3.2
+    girderLoft
   };
 }
 

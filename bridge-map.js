@@ -376,7 +376,8 @@ function describeParams(p) {
   const deck = `${GIRDER_TH[p.girderType] || ''}${p.bridgeKind === 'steel' && p.floorType === 'open' ? ' พื้นโครงเหล็ก + หมอนเหล็ก' : ''}`;
   const lv = Object.values(p.levels || {}).map(Number);
   const level = p.bridgeKind === 'overpass' && lv.length ? `ระดับ ${f1(Math.min(...lv))}–${f1(Math.max(...lv))} ม.` : `สูง ${f1(p.deckLevel)} ม.`;
-  return `${kind} ${deck}, Type ${p.pierType}${portal}, กว้าง ${f1(p.deckWidth)} ม., span ${spanDesc(p)}, ${level}${p.skew && p.bridgeKind !== 'steel' ? `, เฉียง ${f1(p.skew)}°` : ''}`;
+  const pre = p.preset === 'auto' ? ' (แบบมาตรฐานตามช่วง)' : '';
+  return `${kind}${pre} ${deck}, Type ${p.pierType}${portal}, กว้าง ${f1(p.deckWidth)} ม., span ${spanDesc(p)}, ${level}${p.skew && p.bridgeKind !== 'steel' ? `, เฉียง ${f1(p.skew)}°` : ''}`;
 }
 
 function renderModelInfo(note = '') {

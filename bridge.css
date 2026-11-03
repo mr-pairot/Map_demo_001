@@ -413,3 +413,11 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 .s-pierline { stroke: var(--muted); stroke-width: 3; }
 .s-small { font-size: 9px; fill: var(--muted); }
 .s-over { fill: var(--warn); font-weight: 600; }
+
+/* v3.1: ส่วนพับเก็บ */
+.more { display: grid; gap: 8px; }
+.more summary { cursor: pointer; font-size: 0.88rem; color: var(--muted); }
+.more summary:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+.more[open] summary { margin-bottom: 4px; color: var(--ink); }
+.note { color: var(--muted); font-size: 0.78rem; }
+.s-cover { fill: var(--sec-concrete); stroke: var(--ink); stroke-width: 0.6; stroke-dasharray: 2 1.5; }
