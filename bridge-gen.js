@@ -124,7 +124,7 @@ const DEFAULTS = Object.freeze({
 const CB_COMMON = Object.freeze({
   bridgeKind: 'concrete', girderType: 'igirder', deckSection: 'trough', deckWidth: 11, tracks: 2, trackSpacing: 5,
   girderWidth: 0.6, bottomWidth: 0.6, webThick: 0.2, topFlangeT: 0.15, topTaper: 0.15, botFlangeT: 0.25, botTaper: 0.15,
-  edgeGirder: 'i', diaphragm: 'list', diaphragmThick: 0.2, endDiaphragm: true, endDiaphragmThick: 0.6, endGap: 0.04,
+  diaphragm: 'list', diaphragmThick: 0.2, endDiaphragm: true, endDiaphragmThick: 0.6, endGap: 0.04,
   slabEdge: 0.2, crossfall: 2, retOffset: 1.4, retThick: 0.2, retHeightA: 0.67, retHeightB: 0.745,
   troughWidth: 1.13, troughDepth: 0.27, coverThick: 0.08, ballastDepth: 0.5,
   railings: '0', handrail: true, handrailHeight: 1.0, postEnd: 0.4, panelBays: 4,
@@ -792,9 +792,9 @@ function girderLoft(sec, solidSide, len, eb, et) {
     if (x1 - x0 < 1e-6) continue;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
-      // จุดเรียงตามเข็มนาฬิกาเมื่อมองจาก +x → หน้าหันออกด้านนอก
-      V(x0, P0[i]); V(x1, P1[i]); V(x1, P1[j]);
-      V(x0, P0[i]); V(x1, P1[j]); V(x0, P0[j]);
+      // จุดหน้าตัดเรียงตามเข็มนาฬิกา (z ขวา y ขึ้น) → สลับลำดับให้ผิวหันออกด้านนอก
+      V(x0, P0[i]); V(x1, P1[j]); V(x1, P1[i]);
+      V(x0, P0[i]); V(x0, P0[j]); V(x1, P1[j]);
     }
   }
   // ฝาปลายสองข้าง (หน้าตัดทึบ)
@@ -1217,14 +1217,16 @@ function buildConcreteSpan(d, kit) {
       const s = d.iSec;
       const zc = (zs[0] + zs[zs.length - 1]) / 2;
       const zw = zs[zs.length - 1] - zs[0];
+      // คานขวางกลางช่วงสิ้นสุดที่ผิวเอวด้านในของคานริม (ไม่โผล่ทะลุออกนอกคานริม)
+      const zwIn = Math.max(0.1, zw - s.tw);
       // คานขวางกลางช่วง: คอนกรีตจากใต้แผ่นพื้นถึงเหนือปีกล่าง / เหล็กแผ่น · ตั้งฉากกับคาน
       const th = p.diaphragmThick > 0 ? p.diaphragmThick : (d.steel ? 0.05 : 0.25);
       const yTop = d.steel ? gTop - s.tf - 0.05 : gTop - (d.trough ? 0 : s.tf + 0.08);
       const yBot = d.steel ? yTop - s.h * 0.6 : gTop - s.h + s.bt + s.tb;
       const xs = diaphragmXs(p, len);
       const isEnd = (x) => p.diaphragm !== 'list' && (x < 0.31 || x > len - 0.31);
-      const mid = xs.filter((x) => !isEnd(x)).map((x) => ({ x: x0 + x, y: (yTop + yBot) / 2, z: zc, sx: th, sy: yTop - yBot, sz: zw }));
-      const ends = xs.filter(isEnd).map((x) => ({ x: x0 + x, y: (yTop + yBot) / 2, z: zc, sx: th, sy: yTop - yBot, sz: zw }));
+      const mid = xs.filter((x) => !isEnd(x)).map((x) => ({ x: x0 + x, y: (yTop + yBot) / 2, z: zc, sx: th, sy: yTop - yBot, sz: zwIn }));
+      const ends = xs.filter(isEnd).map((x) => ({ x: x0 + x, y: (yTop + yBot) / 2, z: zc, sx: th, sy: yTop - yBot, sz: zwIn }));
       const dm = mergedBoxes(mid, gMat, 'diaphragm');
       if (dm) straight.add(dm);
       const de = mergedBoxes(ends, gMat, 'diaphragm');
