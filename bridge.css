@@ -421,3 +421,6 @@ select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 .more[open] summary { margin-bottom: 4px; color: var(--ink); }
 .note { color: var(--muted); font-size: 0.78rem; }
 .s-cover { fill: var(--sec-concrete); stroke: var(--ink); stroke-width: 0.6; stroke-dasharray: 2 1.5; }
+
+/* v3.4: เส้นชิ้นส่วนเหล็ก (ค้ำ / ท่อนตั้ง / ทแยง) */
+.s-steel-line { stroke: var(--ink); stroke-width: 1.4; fill: none; stroke-linecap: round; }

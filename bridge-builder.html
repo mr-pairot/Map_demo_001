@@ -53,17 +53,13 @@
         <input name="name" type="text" maxlength="60" autocomplete="off">
       </label>
 
-      <div class="field" data-kinds="concrete">
+      <div class="field" data-kinds="concrete steel">
         <label for="in-preset">แบบมาตรฐานโครงการ</label>
         <select id="in-preset" name="preset" aria-describedby="hint-preset">
           <option value="none">ไม่ใช้ (กรอกเอง)</option>
           <option value="auto">อัตโนมัติตามความยาวช่วง</option>
-          <option value="cb15">กรอกตามแบบ Slab span 15 ม.</option>
-          <option value="cb20">กรอกตามแบบ Slab span 20 ม.</option>
-          <option value="cb25">กรอกตามแบบ Slab span 25 ม.</option>
-          <option value="cb30">กรอกตามแบบ Slab span 30 ม.</option>
         </select>
-        <small id="hint-preset">อัตโนมัติ = แต่ละช่วงใช้แบบของตัวเอง (คาน พื้น ราว ตามแบบ) · เลือกแบบช่วงใด = กรอกค่าตามแบบนั้นลงช่องให้แก้ต่อได้</small>
+        <small id="hint-preset">อัตโนมัติ = แต่ละช่วงใช้แบบของตัวเอง · เลือกแบบช่วงใด = กรอกค่าตามแบบนั้นลงช่องให้แก้ต่อได้</small>
       </div>
 
       <fieldset class="group">
@@ -161,6 +157,31 @@
           <label><input type="radio" name="girderType" value="igirder"><span id="ig-label">คาน I</span></label>
         </div>
       </fieldset>
+
+      <div class="type-fields" id="truss-fields" hidden>
+        <div class="segmented" role="radiogroup" aria-label="รูปแบบโครงถัก">
+          <label><input type="radio" name="trussStyle" value="legacy"><span>โครงถักเดิม</span></label>
+          <label><input type="radio" name="trussStyle" value="project"><span>ตามแบบโครงการ</span></label>
+        </div>
+        <div id="truss-project" hidden>
+          <div class="grid2">
+            <label class="field"><span>ช่อง / ช่องปลาย (ม.)</span><span class="row2"><input name="panel" type="number" min="2" max="15" step="0.05" inputmode="decimal" aria-label="ระยะช่อง"><input name="endPanel" type="number" min="2" max="15" step="0.05" inputmode="decimal" aria-label="ช่องปลาย"></span></label>
+            <label class="field"><span>ระยะโครงถัก (ม.)</span><input name="trussSpacing" type="number" min="5" max="16" step="0.05" inputmode="decimal"></label>
+            <label class="field"><span>สูงที่ปลาย / สูงสุด (ม.)</span><span class="row2"><input name="trussHeight" type="number" min="3" max="25" step="0.05" inputmode="decimal" aria-label="ความสูงที่ปลาย"><input name="trussHeightMax" type="number" min="3" max="30" step="0.05" inputmode="decimal" aria-label="ความสูงสูงสุด"></span></label>
+            <label class="field"><span>ช่องที่คอร์ดบนลาดขึ้น</span><input name="riseNodes" type="number" min="0" max="20" step="1" inputmode="numeric"><small>0 = คอร์ดบนตรง</small></label>
+            <label class="field"><span>ท่อนทแยง</span>
+              <select name="diagonals"><option value="warren">Warren</option><option value="pratt">Pratt</option></select>
+              <small>ช่องกลางไขว้ X เมื่อช่องเป็นเลขคี่</small></label>
+            <label class="field"><span>ค้ำบน</span>
+              <select name="upperBracing"><option value="none">ไม่มี (strut อย่างเดียว)</option><option value="x1">X ทุกช่อง</option><option value="x2">X ครอบ 2 ช่อง</option></select></label>
+          </div>
+          <label class="check"><input type="checkbox" name="swayV"><span>ค้ำโยก V คว่ำ</span></label>
+          <label class="check"><input type="checkbox" name="topKnee"><span>ค้ำมุมบน</span></label>
+          <label class="check"><input type="checkbox" name="sidewalk"><span>ทางเดินข้างนอกโครงถัก</span></label>
+          <label class="field" id="sidewalk-width"><span>ทางเดินกว้าง (ม.)</span><input name="sidewalkWidth" type="number" min="0.5" max="2.5" step="0.05" inputmode="decimal"></label>
+          <small class="note">ความกว้างพื้นคำนวณจากระยะโครงถัก + ทางเดินข้าง · ขนาดชิ้นส่วนตามแบบ 75 / 100 ม.</small>
+        </div>
+      </div>
 
       <div class="type-fields" id="ig-fields" hidden>
         <div class="grid2">
