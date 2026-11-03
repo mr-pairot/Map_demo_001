@@ -365,13 +365,18 @@ btnPick.addEventListener('click', () => {
 
 /* ---------- แบบสะพาน ---------- */
 const modelInfo = $('model-info');
-const DECK_TH = { concrete: 'พื้นคอนกรีต', truss: 'โครงเหล็ก' };
+const KIND_TH = { concrete: 'สะพานคอนกรีต', steel: 'สะพานเหล็ก', overpass: 'Overpass' };
+const GIRDER_TH = { box: 'คานกล่อง', igirder: 'คาน I', truss: 'โครงถัก' };
 
 function describeParams(p) {
   const portal = p.pierType === 'C' ? ` (เสาห่าง ${f1(p.portalSpan)} ม.)`
     : p.pierType === 'A' ? (p.aTopMode === 'cap' ? ' (เสาผาย มีคานหัวเสา)' : ' (เสาผาย)')
     : p.pierType === 'D' ? ` (ผนังหนา ${f1(p.dThick)} ม.)` : '';
-  return `Type ${p.pierType}${portal} ${DECK_TH[p.deckType]}, กว้าง ${f1(p.deckWidth)} ม., span ${spanDesc(p)}, สูง ${f1(p.deckLevel)} ม.${p.skew && p.deckType !== 'truss' ? `, เฉียง ${f1(p.skew)}°` : ''}`;
+  const kind = KIND_TH[p.bridgeKind] || KIND_TH.concrete;
+  const deck = `${GIRDER_TH[p.girderType] || ''}${p.bridgeKind === 'steel' && p.floorType === 'open' ? ' พื้นโครงเหล็ก + หมอนเหล็ก' : ''}`;
+  const lv = Object.values(p.levels || {}).map(Number);
+  const level = p.bridgeKind === 'overpass' && lv.length ? `ระดับ ${f1(Math.min(...lv))}–${f1(Math.max(...lv))} ม.` : `สูง ${f1(p.deckLevel)} ม.`;
+  return `${kind} ${deck}, Type ${p.pierType}${portal}, กว้าง ${f1(p.deckWidth)} ม., span ${spanDesc(p)}, ${level}${p.skew && p.bridgeKind !== 'steel' ? `, เฉียง ${f1(p.skew)}°` : ''}`;
 }
 
 function renderModelInfo(note = '') {
@@ -452,7 +457,7 @@ function renderList() {
     <li>
       <div class="placed-text">
         <b>${i + 1}. ${r.name}</b>
-        <span>${r.kind === 'params' ? `Type ${r.params.pierType}, ${spanDesc(r.params)}` : r.glbName}, ทิศ ${f1(r.bearing)}°</span>
+        <span>${r.kind === 'params' ? `${KIND_TH[r.params.bridgeKind] || KIND_TH.concrete} Type ${r.params.pierType}, ${spanDesc(r.params)}` : r.glbName}, ทิศ ${f1(r.bearing)}°</span>
       </div>
       <button class="btn small" type="button" data-act="fly" data-id="${r.id}">ดู</button>
       <button class="btn small" type="button" data-act="del" data-id="${r.id}" aria-label="ลบ ${r.name}">ลบ</button>

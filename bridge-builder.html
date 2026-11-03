@@ -27,15 +27,27 @@
   <aside class="panel tall" aria-label="ค่าการออกแบบสะพาน">
     <header>
       <h1>ออกแบบสะพาน</h1>
-      <p class="sub">กำหนดตอม่อ พื้นสะพาน และช่วงสะพาน แล้วส่งไปวางบนแผนที่หรือดาวน์โหลดเป็นไฟล์</p>
+      <p class="sub">เลือกประเภทสะพาน กำหนดตอม่อ คาน พื้น และช่วงสะพาน แล้วส่งไปวางบนแผนที่หรือดาวน์โหลดเป็นไฟล์</p>
     </header>
+
+    <div class="kind-tabs" role="tablist" aria-label="ประเภทสะพาน">
+      <button type="button" role="tab" id="tab-concrete" data-kind="concrete" aria-selected="true">สะพานคอนกรีต</button>
+      <button type="button" role="tab" id="tab-steel" data-kind="steel" aria-selected="false" tabindex="-1">สะพานเหล็ก</button>
+      <button type="button" role="tab" id="tab-overpass" data-kind="overpass" aria-selected="false" tabindex="-1">Overpass</button>
+    </div>
 
     <figure class="section-view">
       <div id="section-svg"></div>
       <figcaption>หน้าตัดตอม่อ มองตามแนวสะพาน</figcaption>
     </figure>
 
-    <form id="bridge-form" class="form" novalidate>
+    <figure class="section-view" id="profile-view" hidden>
+      <div id="profile-svg"></div>
+      <figcaption>รูปตัดตามยาว ระดับพื้นรายตอม่อ</figcaption>
+    </figure>
+
+    <form id="bridge-form" class="form" novalidate role="tabpanel" aria-labelledby="tab-concrete">
+      <input type="hidden" name="bridgeKind" value="concrete">
       <label class="field">
         <span>ชื่อสะพาน</span>
         <input name="name" type="text" maxlength="60" autocomplete="off">
@@ -129,23 +141,117 @@
       </div>
 
       <fieldset class="group">
-        <legend>พื้นสะพาน</legend>
-        <div class="segmented">
-          <label><input type="radio" name="deckType" value="concrete"><span>คอนกรีต</span></label>
-          <label><input type="radio" name="deckType" value="truss"><span>โครงเหล็ก</span></label>
+        <legend>คานรับพื้น</legend>
+        <div class="segmented" role="radiogroup" aria-label="ชนิดคานรับพื้น">
+          <label data-kinds="concrete overpass"><input type="radio" name="girderType" value="box"><span>คานกล่อง (เดิม)</span></label>
+          <label data-kinds="steel"><input type="radio" name="girderType" value="truss"><span>โครงถัก</span></label>
+          <label><input type="radio" name="girderType" value="igirder"><span id="ig-label">คาน I</span></label>
         </div>
       </fieldset>
 
+      <div class="type-fields" id="ig-fields" hidden>
+        <div class="grid2">
+          <label class="field">
+            <span>จำนวนคาน</span>
+            <input name="girderCount" type="number" min="0" max="16" step="1" inputmode="numeric">
+            <small id="hint-gcount">0 = คำนวณให้ (ห่าง ~2 ม.)</small>
+          </label>
+          <label class="field">
+            <span>ปีกคานกว้าง (ม.)</span>
+            <input name="girderWidth" type="number" min="0" max="2.5" step="0.05" inputmode="decimal">
+            <small>0 = คำนวณให้</small>
+          </label>
+        </div>
+        <div class="field">
+          <span class="field-label">คานริม ด้านนอก</span>
+          <div class="segmented" role="radiogroup" aria-label="รูปด้านนอกของคานริม">
+            <label><input type="radio" name="edgeGirder" value="i"><span>เว้าเอว</span></label>
+            <label><input type="radio" name="edgeGirder" value="solid"><span>ทึบเรียบ</span></label>
+          </div>
+        </div>
+        <label class="field">
+          <span>คานขวาง</span>
+          <select name="diaphragm">
+            <option value="none">ไม่มี</option>
+            <option value="ends">ที่ปลายคาน</option>
+            <option value="mid">ปลาย + กลางช่วง</option>
+            <option value="third">ปลาย + ที่ 1/3</option>
+            <option value="spacing">ทุกระยะที่กำหนด</option>
+          </select>
+        </label>
+        <label class="field" id="dspacing-field">
+          <span>ระยะคานขวาง (ม.)</span>
+          <input name="diaphragmSpacing" type="number" min="3" max="30" step="0.5" inputmode="decimal">
+        </label>
+        <label class="field" id="slab-field">
+          <span>ความหนาแผ่นพื้น (ม.)</span>
+          <input name="slabThick" type="number" min="0.15" max="0.5" step="0.01" inputmode="decimal">
+        </label>
+      </div>
+
+      <fieldset class="group" data-kinds="steel">
+        <legend>พื้นสะพาน</legend>
+        <div class="segmented" role="radiogroup" aria-label="ชนิดพื้นสะพานเหล็ก">
+          <label><input type="radio" name="floorType" value="concrete"><span>พื้นคอนกรีต</span></label>
+          <label><input type="radio" name="floorType" value="open"><span>โครงเหล็ก + หมอน</span></label>
+        </div>
+      </fieldset>
+
+      <div class="type-fields" id="open-fields" hidden>
+        <div class="field">
+          <label for="in-sleeper">ระยะห่างหมอน (ม.)</label>
+          <input id="in-sleeper" name="sleeperSpacing" type="number" min="0.4" max="1.2" step="0.05" inputmode="decimal">
+          <div class="chips" data-for="sleeperSpacing" role="group" aria-label="ระยะห่างหมอนที่ใช้บ่อย"></div>
+        </div>
+        <div class="grid2">
+          <label class="field">
+            <span>ความยาวหมอน (ม.)</span>
+            <input name="sleeperLength" type="number" min="1.6" max="3.2" step="0.05" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span>กว้าง × สูงหมอน (ม.)</span>
+            <span class="row2">
+              <input name="sleeperWidth" type="number" min="0.15" max="0.4" step="0.01" inputmode="decimal" aria-label="ความกว้างหมอน">
+              <input name="sleeperHeight" type="number" min="0.1" max="0.3" step="0.01" inputmode="decimal" aria-label="ความสูงหมอน">
+            </span>
+          </label>
+        </div>
+        <label class="check">
+          <input type="checkbox" name="walkway">
+          <span>ทางเดินตรวจสภาพ (ตะแกรงเหล็กข้างราง)</span>
+        </label>
+      </div>
+
       <div class="grid2">
         <label class="field">
-          <span>ระดับพื้นสะพาน (ม.)</span>
-          <input name="deckLevel" type="number" min="4" max="40" step="0.5" inputmode="decimal">
+          <span id="deck-level-label">ระดับพื้นสะพาน (ม.)</span>
+          <input name="deckLevel" type="number" min="2" max="40" step="0.5" inputmode="decimal">
         </label>
-        <label class="field">
-          <span>ความลึกคาน (ม.)</span>
+        <label class="field" id="depth-field">
+          <span id="depth-label">ความลึกคาน (ม.)</span>
           <input name="girderDepth" type="number" min="0" max="6" step="0.1" inputmode="decimal" aria-describedby="hint-girder">
           <small id="hint-girder">0 = คำนวณให้</small>
         </label>
+      </div>
+
+      <div class="type-fields" data-kinds="overpass">
+        <label class="field">
+          <span>ระดับพื้นรายตอม่อ (ม.)</span>
+          <input name="levels" type="text" autocomplete="off" placeholder="เช่น 1:5, 2:6.5, 4:5" aria-describedby="hint-levels">
+          <small id="hint-levels">ต้นแรก = 1 · ต้นที่ไม่ระบุประมาณค่าจากต้นข้างเคียง · ว่าง = ระดับพื้นด้านบนทุกต้น</small>
+        </label>
+        <div class="grid2">
+          <label class="field">
+            <span>ช่องจราจร</span>
+            <input name="lanes" type="number" min="0" max="6" step="1" inputmode="numeric">
+            <small>0 = ไม่มีเส้นจราจร</small>
+          </label>
+          <label class="field">
+            <span>ความชันสูงสุด (%)</span>
+            <input name="maxGrade" type="number" min="1" max="15" step="0.5" inputmode="decimal">
+            <small>เกินแล้วเตือน</small>
+          </label>
+        </div>
       </div>
 
       <div class="field">
@@ -173,6 +279,40 @@
       </label>
 
       <fieldset class="group">
+        <legend>ราวสะพาน</legend>
+        <div class="grid2">
+          <label class="field">
+            <span>จำนวนแนว</span>
+            <select name="railings">
+              <option value="0">ไม่มี</option>
+              <option value="2">2 แนว (ขอบสองข้าง)</option>
+              <option value="3">3 แนว (+ กลาง)</option>
+              <option value="4">4 แนว (+ ราวด้านใน)</option>
+              <option value="custom">กำหนดเอง</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>ความสูงราว (ม.)</span>
+            <input name="railingHeight" type="number" min="0.6" max="2" step="0.05" inputmode="decimal">
+          </label>
+        </div>
+        <div class="segmented" role="radiogroup" aria-label="แบบราว">
+          <label><input type="radio" name="railingStyle" value="wall"><span>กำแพงคอนกรีต</span></label>
+          <label><input type="radio" name="railingStyle" value="steel"><span>ราวเหล็ก</span></label>
+        </div>
+        <label class="field" id="rinset-field">
+          <span>ราวด้านใน ห่างจากขอบพื้น (ม.)</span>
+          <input name="railingInset" type="number" min="0.3" max="3" step="0.05" inputmode="decimal">
+          <small>วัดจากขอบพื้นถึงศูนย์กลางราวด้านใน ทั้งสองข้าง</small>
+        </label>
+        <label class="field" id="rlist-field">
+          <span>ตำแหน่งราว (ม.)</span>
+          <input name="railingList" type="text" autocomplete="off" placeholder="เช่น -6.4, -5.2, 0, 5.2, 6.4">
+          <small>ระยะจากศูนย์กลางสะพาน ลบ = ซ้าย · คั่นด้วย ,</small>
+        </label>
+      </fieldset>
+
+      <fieldset class="group">
         <legend>ตอม่อริม · ตอม่อรายต้น · มุมเฉียง</legend>
         <label class="check">
           <input type="checkbox" name="abutmentD">
@@ -184,10 +324,10 @@
             <input name="wingWall" type="number" min="0" max="12" step="0.5" inputmode="decimal">
             <small>0 = ไม่มี · เฉพาะตอม่อริม Type D</small>
           </label>
-          <label class="field">
+          <label class="field" data-kinds="concrete overpass">
             <span>มุมเฉียง (องศา)</span>
             <input name="skew" type="number" min="-60" max="60" step="0.5" inputmode="decimal">
-            <small>เหมือนช่อง Skew ใน KML · โครงเหล็กไม่รับ</small>
+            <small>เหมือนช่อง Skew ใน KML</small>
           </label>
         </div>
         <label class="field">
@@ -197,7 +337,7 @@
         </label>
       </fieldset>
 
-      <div class="grid2">
+      <div class="grid2" data-kinds="concrete steel">
         <label class="field">
           <span>ทางรถไฟ</span>
           <select name="tracks">
@@ -214,7 +354,7 @@
           </select>
         </label>
       </div>
-      <label class="field">
+      <label class="field" data-kinds="concrete steel">
         <span>ระยะศูนย์กลางทางคู่ (ม.)</span>
         <input name="trackSpacing" type="number" min="3.5" max="6.5" step="0.1" inputmode="decimal">
       </label>

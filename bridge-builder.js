@@ -5,14 +5,18 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 // ตัวสร้างสะพาน (ไฟล์เดียวกับ bpnp-map3d) โหลดเป็นสคริปต์ปกติใน bridge-builder.html
-const { DEFAULTS, PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA } = window.BridgeGen.create(THREE);
+const { PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA, iGirderPoints } = window.BridgeGen.create(THREE);
 
-export const PARAMS_KEY = 'bpnp.bridge.params';
+export const PARAMS_KEY = 'bpnp.bridge.params';   // แบบที่ใช้งานอยู่ (หน้าวางสะพานอ่านค่านี้)
+const TABS_KEY = 'bpnp.bridge.tabs';              // v3: ค่าของแต่ละแท็บ { active, byKind }
+const KIND_TH = { concrete: 'สะพานคอนกรีต', steel: 'สะพานเหล็ก', overpass: 'Overpass' };
 
 const $ = (id) => document.getElementById(id);
 const form = $('bridge-form');
 const panel = document.querySelector('.panel');
 const sectionEl = $('section-svg');
+const profileEl = $('profile-svg');
+const tabButtons = [...document.querySelectorAll('.kind-tabs [role="tab"]')];
 const summaryEl = $('summary');
 const messagesEl = $('messages');
 const btnGlb = $('btn-glb');
@@ -101,21 +105,86 @@ function loop() {
 function readForm() {
   const raw = Object.fromEntries(new FormData(form));
   raw.abutmentD = form.elements.abutmentD.checked;   // checkbox ที่ไม่ติ๊กไม่อยู่ใน FormData
+  raw.walkway = form.elements.walkway.checked;
   return normalizeParams(raw);
 }
 
-// ชนิดตอม่อรายต้น { "2": "B" } → "2:B, 3:C"
-const piersText = (o) => Object.entries(o || {}).map(([k, v]) => `${k}:${v}`).join(', ');
+// ชนิดตอม่อรายต้น { "2": "B" } → "2:B, 3:C" · ระดับรายต้น { "1": 5 } → "1:5"
+const pairsText = (o) => Object.entries(o || {}).map(([k, v]) => `${k}:${v}`).join(', ');
 
 function writeForm(p) {
   for (const [key, value] of Object.entries(p)) {
     const el = form.elements[key];
     if (!el) continue;
     if (el.type === 'checkbox') { el.checked = !!value; continue; }
-    if (key === 'piers') { el.value = piersText(value); continue; }
+    if (key === 'piers' || key === 'levels') { el.value = pairsText(value); continue; }
     if (el instanceof RadioNodeList) el.value = String(value);
     else el.value = key === 'gauge' ? String(Number(value)) : value;
   }
+}
+
+/* ---------- แท็บประเภทสะพาน: แต่ละแท็บจำค่าของตัวเอง ---------- */
+const tabs = { active: 'concrete', byKind: {} };
+
+function saveTabs(p) {
+  tabs.active = p.bridgeKind;
+  tabs.byKind[p.bridgeKind] = p;
+  try {
+    localStorage.setItem(PARAMS_KEY, JSON.stringify(p));
+    localStorage.setItem(TABS_KEY, JSON.stringify(tabs));
+  } catch (_) { /* ไม่มีที่เก็บก็ทำงานต่อได้ */ }
+}
+
+function syncTabs(kind) {
+  tabButtons.forEach((b) => {
+    const on = b.dataset.kind === kind;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+  });
+  form.setAttribute('aria-labelledby', `tab-${kind}`);
+}
+
+function switchKind(kind) {
+  const cur = readForm();
+  if (kind === cur.bridgeKind) return;
+  tabs.byKind[cur.bridgeKind] = cur;
+  writeForm(tabs.byKind[kind] || normalizeParams({ bridgeKind: kind }));
+  update({ fit: true });
+}
+
+tabButtons.forEach((b, i) => {
+  b.addEventListener('click', () => switchKind(b.dataset.kind));
+  b.addEventListener('keydown', (e) => {
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = tabButtons[(i + step + tabButtons.length) % tabButtons.length];
+    next.focus();
+    switchKind(next.dataset.kind);
+  });
+});
+
+// แสดงเฉพาะช่องที่เกี่ยวกับแท็บ/ตัวเลือกปัจจุบัน
+function syncFields(p) {
+  const kind = p.bridgeKind;
+  document.querySelectorAll('#bridge-form [data-kinds]').forEach((el) => { el.hidden = !el.dataset.kinds.split(' ').includes(kind); });
+  const ig = p.girderType === 'igirder';
+  const open = kind === 'steel' && p.floorType === 'open';
+  $('portal-field').hidden = p.pierType !== 'C';
+  $('a-fields').hidden = p.pierType !== 'A';
+  $('d-fields').hidden = p.pierType !== 'D';
+  $('ig-fields').hidden = !ig;
+  $('dspacing-field').hidden = p.diaphragm !== 'spacing';
+  $('slab-field').hidden = open;
+  $('open-fields').hidden = !open;
+  $('depth-field').hidden = p.girderType === 'truss';
+  $('rinset-field').hidden = p.railings !== '4';
+  $('rlist-field').hidden = p.railings !== 'custom';
+  $('profile-view').hidden = kind !== 'overpass';
+  $('ig-label').textContent = kind === 'steel' ? 'คานเหล็ก I' : 'คาน I';
+  $('depth-label').textContent = ig ? 'ความสูงคาน I (ม.)' : 'ความลึกคาน (ม.)';
+  $('deck-level-label').textContent = kind === 'overpass' ? 'ระดับพื้นตั้งต้น (ม.)' : 'ระดับพื้นสะพาน (ม.)';
+  $('hint-gcount').textContent = open ? '0 = คานคู่ใต้รางแต่ละทาง' : '0 = คำนวณให้ (ห่าง ~2 ม.)';
 }
 
 function buildChips() {
@@ -146,8 +215,8 @@ const f1 = (v) => (Math.round(v * 10) / 10).toLocaleString('th-TH');
 function sectionSvg(d) {
   const p = d.params;
   const VBW = 320, VBH = 220, mL = 46, mR = 14, mT = 28, mB = 22;
-  const halfW = Math.max(d.capLen / 2, d.truss ? d.trussZ + 0.35 : d.W / 2);
-  const topY = d.truss ? d.trussBottomY + d.trussHeight + 0.35 : p.deckLevel + 1;
+  const halfW = Math.max(d.capLen / 2, d.truss ? d.trussZ + 0.35 : d.W / 2, ...(d.girderZ || []).map((z) => Math.abs(z) + 0.6));
+  const topY = d.truss ? d.trussBottomY + d.trussHeight + 0.35 : d.railBaseY + Math.max(1, d.railZ.length ? p.railingHeight : 0.5);
   const k = Math.min((VBW - mL - mR) / (2 * halfW), (VBH - mT - mB) / topY);
   const cx = mL + (VBW - mL - mR) / 2;
   const gy = VBH - mB;
@@ -200,27 +269,69 @@ function sectionSvg(d) {
   }
 
   // แผ่นรองคาน
-  for (const z of d.padZ) out.push(rect(z - 0.45, d.capTopY, z + 0.45, d.capTopY + d.bearing, 's-pad'));
+  const ps = d.padSize || 0.9;
+  for (const z of d.padZ) out.push(rect(z - ps / 2, d.capTopY, z + ps / 2, d.capTopY + d.bearing, 's-pad'));
 
   // โครงสร้างส่วนบน
-  const y = p.deckLevel;
-  if (!d.truss) {
-    const W = d.W, dep = d.superDepth, bt = W * 0.275, bb = W * 0.21;
-    out.push(poly([[-W / 2, y], [W / 2, y], [W / 2, y - 0.25], [bt, y - 0.45], [bb, y - dep], [-bb, y - dep], [-bt, y - 0.45], [-W / 2, y - 0.25]], 's-concrete'));
-    for (const z of [-(W / 2 - 0.1), W / 2 - 0.1]) out.push(rect(z - 0.1, y, z + 0.1, y + 1, 's-concrete'));
-  } else {
+  const y = d.deckLevel;
+  if (d.truss) {
     const zt = d.trussZ, yb = d.trussBottomY, yt = yb + d.trussHeight;
-    out.push(rect(-zt, y - 0.35, zt, y, 's-concrete'));
-    out.push(rect(-zt, yb - 0.35, zt, y - 0.35, 's-steel'));
+    if (d.open) {
+      out.push(rect(-zt, yb - 0.35, zt, y - 0.8, 's-steel'));
+      const ss = p.gauge > 1.2 ? 2.0 : 1.8;
+      for (const zc of d.trackCenters) for (const s of [-1, 1]) {
+        out.push(poly(iGirderPoints({ h: 0.8, bf: 0.3, bb: 0.3, tw: 0.03, tf: 0.04, ta: 0, bt: 0.04, tb: 0 }).map(([z, yy]) => [z + zc + (s * ss) / 2, yy + y]), 's-steel'));
+      }
+    } else {
+      out.push(rect(-zt, y - 0.35, zt, y, 's-concrete'));
+      out.push(rect(-zt, yb - 0.35, zt, y - 0.35, 's-steel'));
+    }
     for (const z of [-zt, zt]) out.push(rect(z - 0.35, yb - 0.35, z + 0.35, yt + 0.35, 's-steel'));
     out.push(rect(-zt, yt - 0.18, zt, yt + 0.18, 's-steel'));
+  } else if (d.ig) {
+    const gTop = d.open ? y : y - p.slabThick;
+    const cls = d.steel ? 's-steel' : 's-concrete';
+    const zs = d.girderZ;
+    zs.forEach((z, k) => {
+      const solid = p.edgeGirder === 'solid' && zs.length > 1 ? (k === 0 ? -1 : k === zs.length - 1 ? 1 : 0) : 0;
+      out.push(poly(iGirderPoints(d.iSec, solid).map(([zz, yy]) => [zz + z, yy + gTop]), cls));
+    });
+    if (!d.open) out.push(rect(-d.W / 2, y - p.slabThick, d.W / 2, y, 's-concrete'));
+  } else {
+    const W = d.W, dep = d.superDepth, bt = W * 0.275, bb = W * 0.21;
+    out.push(poly([[-W / 2, y], [W / 2, y], [W / 2, y - 0.25], [bt, y - 0.45], [bb, y - dep], [-bb, y - dep], [-bt, y - 0.45], [-W / 2, y - 0.25]], 's-concrete'));
   }
 
-  // ราง
-  for (const zc of d.trackCenters) {
-    out.push(rect(zc - 1.5, y, zc + 1.5, y + 0.3, 's-ballast'));
-    const half = p.gauge / 2 + 0.035;
-    for (const s of [-half, half]) out.push(rect(zc + s - 0.08, y + 0.3, zc + s + 0.08, y + 0.46, 's-rail'));
+  // ผิวถนน (Overpass)
+  if (d.overpass) out.push(rect(-d.W / 2 + 0.2, y, d.W / 2 - 0.2, y + 0.08, 's-asphalt'));
+
+  // ราวสะพาน
+  const rh = p.railingHeight, rb = d.railBaseY;
+  for (const z of d.railZ) {
+    if (p.railingStyle === 'wall') out.push(rect(z - 0.1, rb, z + 0.1, rb + rh, 's-concrete'));
+    else {
+      out.push(rect(z - 0.05, rb, z + 0.05, rb + rh, 's-steel'));
+      out.push(rect(z - 0.12, rb + rh - 0.08, z + 0.12, rb + rh, 's-steel'));
+    }
+  }
+
+  // ราง: หินโรยทาง หรือ หมอนเหล็ก + ทางเดิน
+  const half = p.gauge / 2 + 0.035;
+  if (d.open) {
+    const sh = p.sleeperHeight, sl = p.sleeperLength;
+    if (p.walkway) {
+      const lim = d.truss ? d.trussZ - 0.4 : d.W / 2;
+      out.push(rect(-lim, y + sh - 0.05, lim, y + sh, 's-grating'));
+    }
+    for (const zc of d.trackCenters) {
+      out.push(rect(zc - sl / 2, y, zc + sl / 2, y + sh, 's-sleeper'));
+      for (const s of [-half, half]) out.push(rect(zc + s - 0.08, y + sh, zc + s + 0.08, y + sh + 0.16, 's-rail'));
+    }
+  } else {
+    for (const zc of d.trackCenters) {
+      out.push(rect(zc - 1.5, y, zc + 1.5, y + 0.3, 's-ballast'));
+      for (const s of [-half, half]) out.push(rect(zc + s - 0.08, y + 0.3, zc + s + 0.08, y + 0.46, 's-rail'));
+    }
   }
 
   // เส้นบอกขนาด: ความกว้าง
@@ -254,12 +365,43 @@ function sectionSvg(d) {
     out.push(`<text class="s-label" x="${cx}" y="${colLabelY}" text-anchor="middle">เสา ${f1(H)} ม.</text>`);
   }
 
-  const label = `หน้าตัดตอม่อ Type ${p.pierType} พื้น${d.truss ? 'โครงเหล็ก' : 'คอนกรีต'} กว้าง ${f1(d.W)} เมตร ระดับพื้นสะพาน ${f1(y)} เมตร`;
+  const girderTh = d.truss ? 'โครงถัก' : d.ig ? `คาน I ${d.girderZ.length} ตัว` : 'คานกล่อง';
+  const label = `หน้าตัด${KIND_TH[p.bridgeKind]} ตอม่อ Type ${p.pierType} ${girderTh} กว้าง ${f1(d.W)} เมตร ระดับพื้นสะพาน ${f1(y)} เมตร`;
   return wrapSvg(out, VBW, VBH, label);
 }
 
 function wrapSvg(parts, w, h, label) {
   return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${label}">${parts.join('')}</svg>`;
+}
+
+/* ---------- รูปตัดตามยาว (Overpass) ---------- */
+function profileSvg(d, levels) {
+  const VBW = 320, VBH = 130, mL = 30, mR = 14, mT = 22, mB = 26;
+  const xs = [0];
+  d.spans.forEach((L) => xs.push(xs[xs.length - 1] + L));
+  const total = xs[xs.length - 1];
+  const top = Math.max(...levels) + 1;
+  const kx = (VBW - mL - mR) / total;
+  const ky = (VBH - mT - mB) / top;
+  const gy = VBH - mB;
+  const X = (x) => (mL + x * kx).toFixed(1);
+  const Y = (y) => (gy - y * ky).toFixed(1);
+  const out = [];
+  out.push(`<line class="s-ground" x1="${mL - 10}" y1="${gy}" x2="${VBW - 4}" y2="${gy}"/>`);
+  levels.forEach((lv, i) => {
+    out.push(`<line class="s-pierline" x1="${X(xs[i])}" y1="${gy}" x2="${X(xs[i])}" y2="${Y(lv - d.superDepth)}"/>`);
+    out.push(`<text class="s-label" x="${X(xs[i])}" y="${Number(Y(lv)) - 6}" text-anchor="middle">${f1(lv)}</text>`);
+    out.push(`<text class="s-label s-small" x="${X(xs[i])}" y="${gy + 13}" text-anchor="middle">${i + 1}</text>`);
+  });
+  out.push(`<polyline class="s-deck" points="${levels.map((lv, i) => `${X(xs[i])},${Y(lv)}`).join(' ')}"/>`);
+  d.spans.forEach((L, i) => {
+    const g = ((levels[i + 1] - levels[i]) / L) * 100;
+    if (Math.abs(g) < 0.05) return;
+    const xm = (xs[i] + xs[i + 1]) / 2, ym = (levels[i] + levels[i + 1]) / 2;
+    const over = Math.abs(g) > d.params.maxGrade;
+    out.push(`<text class="s-label s-small${over ? ' s-over' : ''}" x="${X(xm)}" y="${Number(Y(ym)) + 13}" text-anchor="middle">${g > 0 ? '+' : '−'}${f1(Math.abs(g))}%</text>`);
+  });
+  return wrapSvg(out, VBW, VBH, `รูปตัดตามยาว ระดับพื้นรายตอม่อ ${levels.map(f1).join(', ')} เมตร`);
 }
 
 /* ---------- สรุปขนาด / ข้อความ ---------- */
@@ -287,9 +429,23 @@ function renderSummary(d) {
       rows.push(['ช่องลอดใต้', `กว้าง ${f1(d.clearWidth)} สูง ${f1(d.columnHeight - d.haunch)} ม.`]);
     }
     if (d.hasCap) rows.push([p.pierType === 'C' ? 'คานพอร์ทัล' : 'คานหัวเสา', `ยาว ${f1(d.capLen)} ลึก ${f1(d.capDepth)} ม.`]);
-    rows.push(d.truss
-      ? ['โครงถัก', `สูง ${f1(d.trussHeight)} ม.`]
-      : ['ความลึกคาน', `${f1(d.superDepth)} ม.${p.girderDepth > 0 ? '' : ' (คำนวณให้)'}`]);
+    if (d.truss) rows.push(['โครงถัก', `สูง ${f1(d.trussHeight)} ม.`]);
+    else if (d.ig) {
+      rows.push([d.steel ? 'คานเหล็ก I' : 'คาน I', `${d.girderZ.length} ตัว · สูง ${f1(d.girderH)} ปีก ${f1(d.iSec.bf)} ม.${p.girderDepth > 0 ? '' : ' (สูงคำนวณให้)'}`]);
+      const gap = d.girderZ.length > 1 ? d.girderZ[1] - d.girderZ[0] : 0;
+      const dTh = { none: 'ไม่มี', ends: 'ที่ปลาย', mid: 'ปลาย + กลาง', third: 'ปลาย + 1/3', spacing: `ทุก ${f1(p.diaphragmSpacing)} ม.` }[p.diaphragm];
+      rows.push(['ระยะคาน / คานขวาง', `${gap ? `${f1(gap)} ม.` : '—'} · ${dTh}`]);
+      rows.push(['ยาวคาน', d.spans.length > 1 && p.spanText ? `ตามช่วง ${[...new Set(d.spans.map((s) => f1(s - 0.1)))].join(' / ')} ม.` : `${f1(d.L - 0.1)} ม. (ตามช่วง)`]);
+    } else rows.push(['ความลึกคาน', `${f1(d.superDepth)} ม.${p.girderDepth > 0 ? '' : ' (คำนวณให้)'}`]);
+    if (d.open) {
+      const nSl = Math.floor((d.L - 0.1 - p.sleeperWidth) / p.sleeperSpacing) + 1;
+      rows.push(['หมอนเหล็ก', `@ ${p.sleeperSpacing.toFixed(2)} ม. · ${nSl} ตัว/ราง/ช่วง ${f1(d.L)} ม.`]);
+    }
+    rows.push(['ราว', d.railZ.length ? `${d.railZ.length} แนว · ${p.railingStyle === 'wall' ? 'กำแพงคอนกรีต' : 'ราวเหล็ก'} สูง ${f1(p.railingHeight)} ม.` : 'ไม่มี']);
+    if (d.overpass) {
+      rows.push(['ระดับพื้นรายต้น', d.levels.map(f1).join(' / ') + ' ม.']);
+      rows.push(['ความชัน', d.grades.map((g) => `${g > 0 ? '+' : ''}${f1(g)}%`).join(' / ')]);
+    }
   }
   summaryEl.innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
 }
@@ -314,18 +470,18 @@ function update({ fit = false, note = '' } = {}) {
   scene.add(model);
 
   sectionEl.innerHTML = sectionSvg(d);
+  if (d.overpass) profileEl.innerHTML = profileSvg(d, (model.userData && model.userData.levels) || d.levels);
   renderSummary(d);
   renderMessages(d, note);
   syncChips(p);
-  $('portal-field').hidden = p.pierType !== 'C';
-  $('a-fields').hidden = p.pierType !== 'A';
-  $('d-fields').hidden = p.pierType !== 'D';
+  syncFields(p);
+  syncTabs(p.bridgeKind);
 
   const ok = d.errors.length === 0;
   btnGlb.disabled = !ok;
   btnPlace.disabled = !ok;
 
-  try { localStorage.setItem(PARAMS_KEY, JSON.stringify(p)); } catch (_) { /* ไม่มีที่เก็บก็ทำงานต่อได้ */ }
+  saveTabs(p);
 
   if (ok && (fit || lastLength !== d.totalLength)) {
     fitCamera();
@@ -361,7 +517,8 @@ function download(blob, filename) {
 function fileBase(p) {
   const safe = p.name.replace(/[\\/:*?"<>|\s]+/g, '_');
   const spans = p.spanText ? p.spanText.replace(/\+/g, '-') : `${p.spanLength}m-x${p.spanCount}`;
-  return `${safe}_type${p.pierType}_${p.deckType}_${spans}${p.skew ? `_skew${p.skew}` : ''}`;
+  const deck = p.girderType + (p.bridgeKind === 'steel' && p.floorType === 'open' ? '-open' : '');
+  return `${safe}_${p.bridgeKind}_type${p.pierType}_${deck}_${spans}${p.skew && p.bridgeKind !== 'steel' ? `_skew${p.skew}` : ''}`;
 }
 
 btnGlb.addEventListener('click', async () => {
@@ -382,7 +539,7 @@ btnGlb.addEventListener('click', async () => {
 
 btnJson.addEventListener('click', () => {
   const p = readForm();
-  const data = { type: 'bpnp-bridge', version: 2, params: p };
+  const data = { type: 'bpnp-bridge', version: 3, params: p };
   download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `${fileBase(p)}.json`);
   renderMessages(deriveDims(p), `ดาวน์โหลด ${fileBase(p)}.json แล้ว`);
 });
@@ -396,8 +553,11 @@ $('file-json').addEventListener('change', async (e) => {
     const obj = JSON.parse(await file.text());
     const raw = obj.params || (obj.properties && obj.properties.params) || obj;
     if (!raw || (raw.pierType === undefined && raw.spanLength === undefined)) throw new Error('no params');
-    writeForm(normalizeParams(raw));
-    update({ fit: true, note: `เปิด ${file.name} แล้ว` });
+    const cur = readForm();
+    tabs.byKind[cur.bridgeKind] = cur;
+    const p = normalizeParams(raw);
+    writeForm(p);
+    update({ fit: true, note: `เปิด ${file.name} แล้ว (${KIND_TH[p.bridgeKind]})` });
   } catch (_) {
     update({ note: `${file.name} ไม่ใช่ไฟล์แบบสะพาน ต้องเป็นไฟล์ .json ที่ดาวน์โหลดจากหน้านี้` });
   }
@@ -413,10 +573,15 @@ $('btn-fit').addEventListener('click', fitCamera);
 /* ---------- เริ่มต้น ---------- */
 function loadSaved() {
   try {
-    const raw = localStorage.getItem(PARAMS_KEY);
-    return raw ? normalizeParams(JSON.parse(raw)) : { ...DEFAULTS };
+    const t = JSON.parse(localStorage.getItem(TABS_KEY) || 'null');
+    if (t && t.byKind && t.byKind[t.active]) {
+      for (const [k, v] of Object.entries(t.byKind)) tabs.byKind[k] = normalizeParams(v);
+      return tabs.byKind[t.active];
+    }
+    const raw = localStorage.getItem(PARAMS_KEY);   // ค่าที่เก็บจากเวอร์ชันก่อน (ไม่มีแท็บ)
+    return raw ? normalizeParams(JSON.parse(raw)) : normalizeParams({ bridgeKind: 'concrete' });
   } catch (_) {
-    return { ...DEFAULTS };
+    return normalizeParams({ bridgeKind: 'concrete' });
   }
 }
 
