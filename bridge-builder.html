@@ -409,6 +409,22 @@
           <input type="checkbox" name="abutmentD">
           <span>ตอม่อริม (ต้นแรก/ต้นสุดท้าย) เป็นผนังทึบ Type D</span>
         </label>
+        <div class="field" id="abut-style-field">
+          <span class="field-label">รูปแบบตอม่อริม</span>
+          <div class="segmented" role="radiogroup" aria-label="รูปแบบตอม่อริม">
+            <label><input type="radio" name="abutmentStyle" value="wall"><span>ผนังทึบ</span></label>
+            <label><input type="radio" name="abutmentStyle" value="seat"><span>ที่นั่งคาน + corbel</span></label>
+          </div>
+        </div>
+        <div class="type-fields" id="seat-fields" hidden>
+          <div class="grid2">
+            <label class="field"><span>ที่นั่งหน้าแนวตับ (ม.)</span><input name="seatFront" type="number" min="0.4" max="2" step="0.05" inputmode="decimal"></label>
+            <label class="field"><span>กำแพงหลังหนา (ม.)</span><input name="backwallThick" type="number" min="0.2" max="0.8" step="0.05" inputmode="decimal"></label>
+            <label class="field"><span>corbel ยื่น / ต่ำกว่ายอด (ม.)</span><span class="row2"><input name="corbelWidth" type="number" min="0" max="0.8" step="0.05" inputmode="decimal" aria-label="corbel ยื่นจากกำแพงหลัง"><input name="corbelDrop" type="number" min="0.2" max="1.5" step="0.05" inputmode="decimal" aria-label="ผิวบน corbel ต่ำกว่ายอดกำแพงหลัง"></span></label>
+            <label class="field"><span>corbel ตั้งตรง / ลาด (ม.)</span><span class="row2"><input name="corbelVert" type="number" min="0" max="1" step="0.05" inputmode="decimal" aria-label="ผิว corbel ตั้งตรง"><input name="corbelTaper" type="number" min="0" max="1" step="0.05" inputmode="decimal" aria-label="ส่วนลาดกลับเข้ากำแพง"></span></label>
+          </div>
+          <small class="note">ตัวตับหนา = ที่นั่ง + กำแพงหลัง · กว้างเท่าพื้นสะพาน · กำแพงหลังสูงถึงผิวพื้น</small>
+        </div>
         <div class="grid2">
           <label class="field">
             <span>กำแพงปีก (ม.)</span>

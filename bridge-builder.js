@@ -190,6 +190,8 @@ function syncFields(p) {
   $('open-fields').hidden = !(open || (ballastSl && p.ballastSleepers));
   $('walkway-field').hidden = !open;
   $('endblock-fields').hidden = kind === 'steel';
+  $('abut-style-field').hidden = !p.abutmentD;
+  $('seat-fields').hidden = !p.abutmentD || p.abutmentStyle !== 'seat';
   $('depth-field').hidden = p.girderType === 'truss';
   $('rinset-field').hidden = p.railings !== '4';
   $('rlist-field').hidden = p.railings !== 'custom';
@@ -496,6 +498,10 @@ function renderSummary(d) {
       rows.push(['หมอนเหล็ก', `@ ${p.sleeperSpacing.toFixed(2)} ม. · ${nSl} ตัว/ราง/ช่วง ${f1(d.L)} ม.`]);
     }
     if (d.presetUsed) rows.unshift(['แบบมาตรฐาน', CB_PRESETS[d.presetUsed].label]);
+    if (d.params.abutmentD && d.params.abutmentStyle === 'seat') {
+      const dp = d.params;
+      rows.push(['ตอม่อริม', `ที่นั่ง ${dp.seatFront.toFixed(2)} + กำแพงหลัง ${dp.backwallThick.toFixed(2)} ม. สูง ${(d.superDepth + d.bearing).toFixed(2)} ม. · corbel ${dp.corbelWidth.toFixed(2)} ม.`]);
+    }
     if (d.trough) {
       const t = d.trough, dp = d.params;
       rows.push(['พื้น', `หนา ${dp.slabEdge.toFixed(2)}–${(-t.yb).toFixed(3)} ม. ลาด ${f1(dp.crossfall)}%`]);

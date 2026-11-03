@@ -116,7 +116,15 @@ const DEFAULTS = Object.freeze({
   endTaper: 0,          // ช่วงสอบจากปลายทึบเป็นรูป I (ม.) · แบบโครงการ 1.00
   bearingDetail: false, // แผ่นยางรองคานบนแท่นคอนกรีต แถวละช่วง (ตำแหน่งตามปลายคาน)
   restrainBlocks: false,// บล็อกกันเลื่อนระหว่างคานบนตอม่อ
-  ballastSleepers: false// หมอนคอนกรีตบนหินโรยทาง (ใช้ระยะ/ขนาดหมอนชุดเดียวกับพื้นโครงเหล็ก)
+  ballastSleepers: false,// หมอนคอนกรีตบนหินโรยทาง (ใช้ระยะ/ขนาดหมอนชุดเดียวกับพื้นโครงเหล็ก)
+  // ── v3.3: ตับริม ──
+  abutmentStyle: 'wall',// wall = ผนังทึบ Type D (เดิม) · seat = ที่นั่งคาน + กำแพงหลัง + corbel รับ approach slab
+  seatFront: 0.90,      // seat: ผิวหน้าตับห่างแนวตับ (ด้านช่วงสะพาน) (ม.)
+  backwallThick: 0.30,  // seat: ความหนากำแพงหลัง (ม.) · ตัวตับหนา = seatFront + backwallThick
+  corbelWidth: 0.25,    // seat: corbel ยื่นจากกำแพงหลัง (ม.)
+  corbelDrop: 0.50,     // seat: ผิวบน corbel ต่ำกว่ายอดกำแพงหลัง (ม.)
+  corbelVert: 0.40,     // seat: ผิว corbel ตั้งตรง (ม.)
+  corbelTaper: 0.40     // seat: ส่วนลาดกลับเข้ากำแพง (ม.)
 });
 
 /* แบบมาตรฐานสะพานคอนกรีตของโครงการ (JVBP/CSBN1/SC1/CB)
@@ -129,6 +137,7 @@ const CB_COMMON = Object.freeze({
   troughWidth: 1.13, troughDepth: 0.27, coverThick: 0.08, ballastDepth: 0.5,
   railings: '0', handrail: true, handrailHeight: 1.0, postEnd: 0.4, panelBays: 4,
   endBlock: 2.95, endTaper: 1.0, bearingDetail: true, restrainBlocks: true,
+  abutmentD: true, abutmentStyle: 'seat',
   ballastSleepers: true, sleeperSpacing: 0.6, sleeperLength: 2.0, sleeperWidth: 0.26, sleeperHeight: 0.21
 });
 const CB_PRESETS = Object.freeze({
@@ -204,7 +213,8 @@ const LIMITS = Object.freeze({
   slabEdge: [0.15, 0.5], crossfall: [0, 5], retOffset: [0.8, 2.5], retThick: [0.1, 0.5], retHeightA: [0.2, 1.5], retHeightB: [0.2, 1.5],
   troughWidth: [0.3, 2.5], troughDepth: [0.1, 1], coverThick: [0.04, 0.2], ballastDepth: [0.2, 1],
   handrailHeight: [0.6, 2], postSpacing: [0.8, 3], postEnd: [0, 1.5], panelBays: [1, 10],
-  endBlock: [0, 6], endTaper: [0, 3]
+  endBlock: [0, 6], endTaper: [0, 3],
+  seatFront: [0.4, 2], backwallThick: [0.2, 0.8], corbelWidth: [0, 0.8], corbelDrop: [0.2, 1.5], corbelVert: [0, 1], corbelTaper: [0, 1]
 });
 
 const PRESETS = Object.freeze({
@@ -277,6 +287,8 @@ function normalizeParams(input = {}) {
   p.deckSection = p.deckSection === 'trough' && p.girderType === 'igirder' && kind !== 'overpass' ? 'trough' : 'simple';
   p.panelBays = Math.round(p.panelBays);
   for (const k of ['bearingDetail', 'restrainBlocks', 'ballastSleepers']) p[k] = input[k] === undefined ? DEFAULTS[k] : truthy(input[k]);
+  p.abutmentStyle = p.abutmentStyle === 'seat' ? 'seat' : 'wall';
+  p.abutDir = [-1, 1].includes(Number(input.abutDir)) ? Number(input.abutDir) : 0;
   delete p.presetUsed;
   p.version = 3;
   return p;
@@ -573,6 +585,17 @@ function deriveDims(input) {
     capLen = colSpacing + colD + 0.6;
     capThick = r1(colD + 0.4);
     haunch = r1(Math.min(1.5, colSpacing * 0.1));
+  } else if (p.abutmentStyle === 'seat' && p.abutDir) {
+    // v3.3 ตับริมแบบที่นั่งคาน: ตัวตับหนา seatFront + backwallThick กว้างเท่าพื้นสะพาน มุมเหลี่ยม
+    //   กำแพงหลังจากที่นั่งถึงผิวพื้น · corbel ด้านหลังรับ approach slab
+    hasCap = false;
+    wallWidth = W;
+    colD = r2(p.seatFront + p.backwallThick);
+    capLen = W;
+    capThick = colD;
+    if (p.corbelDrop + p.corbelVert + p.corbelTaper > superDepth + bearing + 0.01) {
+      warnings.push(`corbel ลึก ${r2(p.corbelDrop + p.corbelVert + p.corbelTaper)} ม. เกินความสูงกำแพงหลัง ${r2(superDepth + bearing)} ม.`);
+    }
   } else {
     // Type D ผนังทึบ: กว้างริมถึงริมแคบกว่าพื้นข้างละ 0.5 ม. ขอบริมโค้ง
     hasCap = false;
@@ -652,6 +675,7 @@ function deriveDims(input) {
     aBase, aThick, aTop, flareDepth, flareLip,
     wallWidth, wallRadius,
     clearWidth: p.pierType === 'C' ? colSpacing - colD : 0,
+    seat: p.pierType === 'D' && p.abutmentStyle === 'seat' && p.abutDir ? { f: -p.abutDir } : null,
     columnHeight, trussHeight, trussZ, trussBottomY,
     iSec, girderZ, girderH, trough, slabT, presetUsed: p.presetUsed || null,
     railZ, railBaseY: DL + (open ? p.sleeperHeight : overpass ? 0.05 : 0),
@@ -870,6 +894,18 @@ function makeKit(d) {
     kit.colGeo = loftRoundedRect(pierProfileA(d), d.aThick / 2, Math.min(0.3, d.aThick / 4, d.aBase / 4));
   } else if (type === 'B') {
     kit.colGeo = new THREE.CylinderGeometry(d.colD / 2, (d.colD / 2) * 1.06, d.columnHeight, 28);
+  } else if (type === 'D' && d.seat) {
+    // หน้าตัดตับ (x ตามแนวสะพาน, y ขึ้น) ดึงตามความกว้าง · f = +1 ช่วงสะพานอยู่ด้าน +x
+    const p = d.params, f = d.seat.f;
+    const DL = d.capTopY + d.bearing + d.superDepth;
+    const xb = -f * p.backwallThick, xc = xb - f * p.corbelWidth;
+    const y1 = DL - p.corbelDrop, y2 = y1 - p.corbelVert, y3 = Math.max(d.capTopY, y2 - p.corbelTaper);
+    const pts = [[f * p.seatFront, 0], [f * p.seatFront, d.capTopY], [0, d.capTopY], [0, DL], [xb, DL]];
+    if (p.corbelWidth > 0.01) pts.push([xb, y1], [xc, y1], [xc, y2], [xb, y3]);
+    pts.push([xb, 0]);
+    const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+    kit.colGeo = new THREE.ExtrudeGeometry(sh, { depth: d.wallWidth, bevelEnabled: false });
+    kit.colGeo.translate(0, 0, -d.wallWidth / 2);
   } else if (type === 'D') {
     const a = d.wallWidth / 2;
     kit.colGeo = loftRoundedRect([{ y: 0, a }, { y: d.columnHeight, a }], d.params.dThick / 2, d.wallRadius, 12);
@@ -960,7 +996,7 @@ function buildPier(d, kit) {
     }
   } else if (d.params.pierType === 'D') {
     const wall = new THREE.Mesh(kit.colGeo, MATERIALS.pier);
-    wall.name = 'wall-pier';
+    wall.name = d.seat ? 'abutment' : 'wall-pier';
     g.add(wall);
   } else if (d.params.pierType === 'C') {
     for (const z of [-d.colSpacing / 2, d.colSpacing / 2]) {
@@ -1002,16 +1038,20 @@ function buildPier(d, kit) {
     const rm = mergedBoxes(rub, MATERIALS.pad, 'bearing');
     if (rm) g.add(rm);
   } else {
+    // ตับแบบที่นั่งคาน: แผ่นรองอยู่บนที่นั่ง หน้ากำแพงหลัง
+    const px = d.seat ? d.seat.f * Math.min(0.5, d.params.seatFront / 2 + 0.02) : 0;
     for (const z of kit.padZ) {
-      const pad = box(0.9, d.bearing, d.padSize || 0.9, MATERIALS.pad, 'bearing');
-      pad.position.set(0, d.capTopY + d.bearing / 2, z);
+      const pad = box(d.seat ? Math.min(0.9, d.params.seatFront - 0.1) : 0.9, d.bearing, d.padSize || 0.9, MATERIALS.pad, 'bearing');
+      pad.position.set(px, d.capTopY + d.bearing / 2, z);
       g.add(pad);
     }
   }
   if (kit.blocks && kit.blocks.length) {
     // บล็อกกันเลื่อนระหว่างคาน: จากหัวตอม่อขึ้นไปเหนือท้องคาน 0.6 ม.
     const hb = d.bearing + 0.6;
-    g.add(mergedBoxes(kit.blocks.map((z) => ({ x: 0, y: d.capTopY + hb / 2, z, sx: 0.3, sy: hb, sz: 0.25 })), MATERIALS.pier, 'restrain-block'));
+    // ตับ: บนที่นั่งระหว่างคานขวางปลายกับขอบหน้าตับ (หนา 0.20)
+    const bxk = d.seat ? d.seat.f * (d.params.seatFront - 0.12) : 0, bsx = d.seat ? 0.2 : 0.3;
+    g.add(mergedBoxes(kit.blocks.map((z) => ({ x: bxk, y: d.capTopY + hb / 2, z, sx: bsx, sy: hb, sz: 0.25 })), MATERIALS.pier, 'restrain-block'));
   }
   return g;
 }
@@ -1376,9 +1416,12 @@ function pierTypeAt(p, i, n) {
 // สะพานเฉียง: ความกว้างตามแนวตอม่อ = ความกว้างพื้น ÷ cos(skew) ให้รับพื้นได้เต็มความกว้าง (สูงสุด 20 ม.)
 function pierParams(p, spans, i, skewRad = 0) {
   const n = spans.length;
+  const L = Math.max(spans[i - 1] || 0, spans[i] || 0);
+  p = Object.assign(applyPreset(p, L), { preset: 'none' });   // ใช้แบบมาตรฐานก่อน แล้วจึงขยายความกว้างตามมุมเฉียง
   return Object.assign({}, p, {
     pierType: pierTypeAt(p, i, n),
-    spanLength: Math.max(spans[i - 1] || 0, spans[i] || 0),
+    abutDir: i === 0 ? -1 : i === n ? 1 : 0,                 // ตับริม: ด้านหลังสะพาน (−1 ต้นแรก, +1 ต้นสุดท้าย)
+    spanLength: L,
     spanCount: 1, spanText: '', skew: 0, levels: {},   // การเฉียงจัดการตอนวาง (หมุนตอม่อ/เฉือนช่วง) — ไม่เตือนซ้ำรายต้น
     deckWidth: skewRad ? Math.min(20, Math.round(p.deckWidth / Math.cos(skewRad) * 100) / 100) : p.deckWidth
   });
@@ -1455,13 +1498,15 @@ function bakeSpan(span, skewRad = 0, slope = 0) {
 function buildWingWalls(d, dir, ext, skewRad = 0) {
   const g = new THREE.Group();
   g.name = 'wing-walls';
-  const h = Math.max(1, d.params.deckLevel - 0.3);
+  // ตับแบบที่นั่งคาน: ปีกเริ่มที่ผิวหลังกำแพงหลัง สูงถึงผิวพื้น
+  const h = d.seat ? d.capTopY + d.bearing + d.superDepth : Math.max(1, d.params.deckLevel - 0.3);
   const t = 0.4;
   const zEdge = Math.max(1, (d.wallWidth || (d.W - 1)) / 2 - t / 2);
+  const x0w = d.seat ? d.params.backwallThick : d.params.dThick / 2;
   const ca = Math.cos(skewRad), sa = Math.sin(skewRad);   // แนวสะพานในกรอบของตอม่อ = (cos, 0, sin)
   for (const z of [-zEdge, zEdge]) {
     const w = box(ext, h, t, MATERIALS.pier, 'wing-wall');
-    w.position.set(dir * d.params.dThick / 2 + dir * ca * ext / 2, h / 2, z + dir * sa * ext / 2);
+    w.position.set(dir * x0w + dir * ca * ext / 2, h / 2, z + dir * sa * ext / 2);
     w.rotation.y = -skewRad;
     g.add(w);
   }
