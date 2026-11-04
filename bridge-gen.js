@@ -18,6 +18,10 @@
  *   railings: 0/2/3/4/custom · railingStyle: wall | steel
  *   Overpass: levels = ระดับพื้นรายต้น ช่วงลาดจากต้นหนึ่งถึงอีกต้น
  *   ค่าเดิม (ไม่มี bridgeKind) ได้รูปเหมือน v2 ทุกอย่าง → bpnp-map3d ไม่ต้องแก้ bridge_3d.json
+ *
+ * ── v3.5 ──
+ *   สะพานเหล็กตามแบบ (sb25 – sb100): ตอม่อริมแบบที่นั่งคาน + กำแพงหลัง + corbel (เหมือนคอนกรีต)
+ *   กำแพงหลังสูงถึงหลัง stringer (คานขวาง 0.94 + แผ่นยาง 0.15) — corbel ตัดจบที่ระดับที่นั่ง ไม่เตือน
  */
 (function (root) {
   'use strict';
@@ -154,6 +158,7 @@ const SB_COMMON = Object.freeze({
   panel: 5.0, endPanel: 5.0, sidewalk: true, sidewalkWidth: 1.0, walkway: false, railings: '0',
   sleeperSpacing: 0.5, sleeperLength: 2.0, sleeperWidth: 0.25, sleeperHeight: 0.15,
   floorBeamDepth: 0.94, stringerDepth: 0.5,
+  abutmentStyle: 'seat',   // v3.5 ตอม่อริมแบบที่นั่งคาน + corbel
   handrailHeight: 1.0, postSpacing: 1.25, postEnd: 0.4, panelBays: 4,
   tcH: 0.45, tcB: 0.50, bcH: 0.92, bcB: 0.50, vmH: 0.388, vmB: 0.402, vmShape: 'H', dmH: 0.428, dmB: 0.407, dmShape: 'H',
   riseNodes: 0, upperBracing: 'none', swayV: false, topKnee: false, diagonals: 'warren'
@@ -688,7 +693,8 @@ function deriveDims(input) {
     colD = r2(p.seatFront + p.backwallThick);
     capLen = W;
     capThick = colD;
-    if (p.corbelDrop + p.corbelVert + p.corbelTaper > superDepth + bearing + 0.01) {
+    // โครงถัก: กำแพงหลังเตี้ยกว่า corbel ตามแบบ — corbel ตัดจบที่ระดับที่นั่ง (makeKit) ไม่ต้องเตือน
+    if (!truss && p.corbelDrop + p.corbelVert + p.corbelTaper > superDepth + bearing + 0.01) {
       warnings.push(`corbel ลึก ${r2(p.corbelDrop + p.corbelVert + p.corbelTaper)} ม. เกินความสูงกำแพงหลัง ${r2(superDepth + bearing)} ม.`);
     }
   } else {
