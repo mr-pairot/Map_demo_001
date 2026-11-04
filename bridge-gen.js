@@ -18,10 +18,6 @@
  *   railings: 0/2/3/4/custom · railingStyle: wall | steel
  *   Overpass: levels = ระดับพื้นรายต้น ช่วงลาดจากต้นหนึ่งถึงอีกต้น
  *   ค่าเดิม (ไม่มี bridgeKind) ได้รูปเหมือน v2 ทุกอย่าง → bpnp-map3d ไม่ต้องแก้ bridge_3d.json
- *
- * ── v3.5 ──
- *   สะพานเหล็กตามแบบ (sb25 – sb100): ตอม่อริมแบบที่นั่งคาน + กำแพงหลัง + corbel (เหมือนคอนกรีต)
- *   กำแพงหลังสูงถึงหลัง stringer (คานขวาง 0.94 + แผ่นยาง 0.15) — corbel ตัดจบที่ระดับที่นั่ง ไม่เตือน
  */
 (function (root) {
   'use strict';
@@ -148,7 +144,10 @@ const DEFAULTS = Object.freeze({
   // ขนาดชิ้นส่วน (ม.) สูง × กว้าง · shape: box | H
   tcH: 0.45, tcB: 0.50, bcH: 0.92, bcB: 0.50,
   vmH: 0.388, vmB: 0.402, vmShape: 'H',
-  dmH: 0.428, dmB: 0.407, dmShape: 'H'
+  dmH: 0.428, dmB: 0.407, dmShape: 'H',
+  // ── v3.4.1: รอยต่อระหว่างช่วง ──
+  trussGap: 0.07,       // ช่องว่างระหว่างผิวเหล็กนอกสุดของโครงถักสองช่วง (ม.) · 0 = ใช้ช่องปลาย endPanel แบบเดิม
+  railGap: 0.10         // ช่องว่างราวทางเดินข้าง/พื้นทางเดินระหว่างช่วง (ม.)
 });
 
 /* แบบมาตรฐานสะพานเหล็กโครงถักของโครงการ (ช่องละ 5.00 ม. · เสาปลายเอียง 1 ช่อง · ท่อนตั้งทุกจุด · ค้ำล่าง X ทุกช่อง
@@ -158,7 +157,6 @@ const SB_COMMON = Object.freeze({
   panel: 5.0, endPanel: 5.0, sidewalk: true, sidewalkWidth: 1.0, walkway: false, railings: '0',
   sleeperSpacing: 0.5, sleeperLength: 2.0, sleeperWidth: 0.25, sleeperHeight: 0.15,
   floorBeamDepth: 0.94, stringerDepth: 0.5,
-  abutmentStyle: 'seat',   // v3.5 ตอม่อริมแบบที่นั่งคาน + corbel
   handrailHeight: 1.0, postSpacing: 1.25, postEnd: 0.4, panelBays: 4,
   tcH: 0.45, tcB: 0.50, bcH: 0.92, bcB: 0.50, vmH: 0.388, vmB: 0.402, vmShape: 'H', dmH: 0.428, dmB: 0.407, dmShape: 'H',
   riseNodes: 0, upperBracing: 'none', swayV: false, topKnee: false, diagonals: 'warren'
@@ -267,7 +265,7 @@ const LIMITS = Object.freeze({
   endBlock: [0, 6], endTaper: [0, 3],
   seatFront: [0.4, 2], backwallThick: [0.2, 0.8], corbelWidth: [0, 0.8], corbelDrop: [0.2, 1.5], corbelVert: [0, 1], corbelTaper: [0, 1],
   panel: [2, 15], endPanel: [2, 15], trussSpacing: [5, 16], trussHeight: [3, 25], trussHeightMax: [3, 30], riseNodes: [0, 20],
-  sidewalkWidth: [0.5, 2.5], floorBeamDepth: [0.4, 2], stringerDepth: [0.2, 1.5],
+  sidewalkWidth: [0.5, 2.5], trussGap: [0, 1], railGap: [0, 1], floorBeamDepth: [0.4, 2], stringerDepth: [0.2, 1.5],
   tcH: [0.2, 1.5], tcB: [0.2, 1.5], bcH: [0.2, 1.5], bcB: [0.2, 1.5], vmH: [0.15, 1], vmB: [0.15, 1], dmH: [0.15, 1], dmB: [0.15, 1]
 });
 
@@ -530,12 +528,30 @@ function iGirderPoints(sec, solidSide = 0) {
    ความสูงจุดบน i: เพิ่มเชิงเส้นจาก trussHeight ถึง trussHeightMax ใน riseNodes ช่องแรก/สุดท้าย
    ท่อนทแยง: Warren = ยอดสลับเริ่มที่จุดบนแรก สมมาตรกลางช่วง · Pratt = ลาดลงเข้าหากลางช่วง · ช่องกลาง (n คี่) ไขว้ X */
 function trussLayout(p, L) {
-  const pn = p.panel, ep = Math.min(p.endPanel, pn * 1.5);
-  const n = Math.max(3, Math.round((L - 2 * ep) / pn) + 2);
-  const T = 2 * ep + (n - 2) * pn;
-  const off = r2((L - T) / 2);
+  const pn = p.panel;
+  let ep, n, T, off;
+  if (p.trussGap > 0) {
+    // v3.4.1: ผิวเหล็กนอกสุดห่างแนวตอม่อ trussGap/2 · จุดล่างแรกถอยเข้าเท่าส่วนยื่นตามแนวนอนของเสาปลาย
+    //   ส่วนยื่น = ครึ่งความหนาเสาปลาย × sin(มุมเสาปลาย) (อย่างน้อยครึ่งความกว้างคานขวางปลาย 0.15)
+    //   ช่องในยาว panel · ช่องปลายสองข้างรับส่วนที่เหลือ
+    n = Math.max(3, Math.round(L / pn));
+    let e = 0.3;
+    for (let k = 0; k < 3; k++) {
+      ep = (L - p.trussGap - 2 * e - (n - 2) * pn) / 2;
+      const th = Math.atan2(p.trussHeight, Math.max(0.5, ep));
+      e = Math.max(0.15, (p.tcH / 2) * Math.sin(th));
+    }
+    off = r2(p.trussGap / 2 + e);
+    T = L - 2 * off;
+    ep = (T - (n - 2) * pn) / 2;
+  } else {
+    ep = Math.min(p.endPanel, pn * 1.5);
+    n = Math.max(3, Math.round((L - 2 * ep) / pn) + 2);
+    T = 2 * ep + (n - 2) * pn;
+    off = r2((L - T) / 2);
+  }
   const xs = [off];
-  for (let i = 1; i <= n; i++) xs.push(r2(xs[i - 1] + (i === 1 || i === n ? ep : pn)));
+  for (let i = 1; i <= n; i++) xs.push(i === n ? r2(L - off) : r2(xs[i - 1] + (i === 1 ? ep : pn)));
   const h0 = p.trussHeight, hm = Math.max(h0, p.trussHeightMax), r = p.riseNodes;
   const heights = xs.map((_, i) => {
     if (i === 0 || i === n) return 0;
@@ -555,7 +571,7 @@ function trussLayout(p, L) {
       diags.push(i < j ? (downRight ? [i, i + 1] : [i + 1, i]) : (downRight ? [i + 1, i] : [i, i + 1]));
     }
   }
-  return { n, xs, heights, off, T, diags, s: p.trussSpacing, hMax: Math.max(...heights) };
+  return { n, xs, heights, off, T, ep: r2(ep), diags, s: p.trussSpacing, hMax: Math.max(...heights) };
 }
 
 /* ---------- คำนวณขนาดชิ้นส่วนจากพารามิเตอร์ ---------- */
@@ -693,8 +709,7 @@ function deriveDims(input) {
     colD = r2(p.seatFront + p.backwallThick);
     capLen = W;
     capThick = colD;
-    // โครงถัก: กำแพงหลังเตี้ยกว่า corbel ตามแบบ — corbel ตัดจบที่ระดับที่นั่ง (makeKit) ไม่ต้องเตือน
-    if (!truss && p.corbelDrop + p.corbelVert + p.corbelTaper > superDepth + bearing + 0.01) {
+    if (p.corbelDrop + p.corbelVert + p.corbelTaper > superDepth + bearing + 0.01) {
       warnings.push(`corbel ลึก ${r2(p.corbelDrop + p.corbelVert + p.corbelTaper)} ม. เกินความสูงกำแพงหลัง ${r2(superDepth + bearing)} ม.`);
     }
   } else {
@@ -727,6 +742,7 @@ function deriveDims(input) {
     if (p.pierType === 'A') parts.push(`ช่วงผาย ${flareDepth} ม.`);
     errors.push(`ระดับพื้นสะพาน ${DL} ม. ต่ำเกินไป ต้องสูงอย่างน้อย ${need} ม. เพื่อให้มีที่สำหรับ${parts.join(' ')}`);
   }
+  if (tp && tp.ep < p.panel * 0.6) warnings.push(`ช่องปลายสั้น ${tp.ep} ม. (ช่วง ${r1(L)} ม. ไม่ลงตัวกับช่อง ${p.panel} ม.)`);
   if (tp && tp.off < -0.01) warnings.push(`โครงถัก ${tp.n} ช่องยาว ${r2(tp.T)} ม. เกินช่วง ${r1(L)} ม. — ปรับระยะช่องหรือช่องปลาย`);
   if (tp && p.trussHeightMax < p.trussHeight) warnings.push('ความสูงสูงสุดต่ำกว่าความสูงที่ปลาย ใช้ความสูงที่ปลายแทน');
   if (tp && p.tracks === 2 && tp.s / 2 - p.trackSpacing / 2 < 2.0) warnings.push(`โครงถักห่าง ${tp.s} ม. แคบเกินไปสำหรับทางคู่ห่าง ${p.trackSpacing} ม.`);
@@ -1162,7 +1178,7 @@ function buildPier(d, kit) {
 
 /* ---------- ทางรถไฟบนพื้นสะพาน ----------
    หินโรยทาง: หิน 0.3 ม. + ราง · พื้นโครงเหล็ก: หมอนเหล็กตามระยะที่กำหนด + ราง + ทางเดินตรวจสภาพ */
-function addTracks(g, d, x0, len) {
+function addTracks(g, d, x0, len, rx0 = x0, rlen = len) {   // v3.4.1: rx0/rlen = ช่วงของราง (ต่อเนื่องข้ามรอยต่อ)
   const p = d.params;
   const y = p.deckLevel;
   const half = p.gauge / 2 + 0.035;
@@ -1215,7 +1231,7 @@ function addTracks(g, d, x0, len) {
   const sleepers = [], rails = [];
   for (const zc of d.trackCenters) {
     for (let i = 0; i < n; i++) sleepers.push({ x: x1 + i * p.sleeperSpacing, y: y + sh / 2, z: zc, sx: sw, sy: sh, sz: sl });
-    for (const side of [-half, half]) rails.push({ x: x0 + len / 2, y: y + sh + 0.08, z: zc + side, sx: len, sy: 0.16, sz: 0.07 });
+    for (const side of [-half, half]) rails.push({ x: rx0 + rlen / 2, y: y + sh + 0.08, z: zc + side, sx: rlen, sy: 0.16, sz: 0.07 });
   }
   const sm = mergedBoxes(sleepers, MATERIALS.sleeper, 'steel-sleepers');
   if (sm) g.add(sm);
@@ -1400,7 +1416,8 @@ function buildConcreteSpan(d, kit) {
 function handrailLayout(p, L) {
   const a = p.postEnd, S1 = p.postSpacing, nb = p.panelBays, J = 0.3;
   const avail = Math.max(1, L - 2 * a);
-  const n = Math.max(1, Math.round((avail + J) / (nb * S1 + J)));
+  // fillRail: ปัดจำนวนแผงขึ้น ระยะเสาลดให้แผงเต็มช่วงพอดี (ราวเว้นช่องคงที่ระหว่างช่วง)
+  const n = Math.max(1, (p.fillRail ? Math.ceil : Math.round)((avail + J) / (nb * S1 + J) - (p.fillRail ? 1e-6 : 0)));
   const bay = Math.min(S1, (avail - J * (n - 1)) / (nb * n));
   const total = n * nb * bay + J * (n - 1);
   const start = (L - total) / 2;
@@ -1674,23 +1691,25 @@ function buildProjectTruss(d) {
     const arms = [], plates = [];
     for (const sg of [-1, 1]) {
       for (let i = 0; i <= tp.n; i++) arms.push({ a: V(B(i), yw - 0.2, sg * (zt + 0.25)), b: V(B(i), yw - 0.2, sg * z1), h: 0.3, w: 0.15, shape: 'I', yRef: UP });
-      plates.push({ x: (B(0) + B(tp.n)) / 2, y: yw - 0.02, z: sg * (z0 + z1) / 2, sx: B(tp.n) - B(0), sy: 0.04, sz: sw });
+      // พื้นทางเดินเว้นช่อง railGap ระหว่างช่วง
+      plates.push({ x: d.L / 2, y: yw - 0.02, z: sg * (z0 + z1) / 2, sx: d.L - p.railGap, sy: 0.04, sz: sw });
     }
     add(mergeMembers(arms, MATERIALS.steel, 'sidewalk-bracket'));
     add(mergedBoxes(plates, MATERIALS.grating, 'sidewalk'));
-    const lay = handrailLayout(p, d.L);
+    // ราว: ผิวเสาปลายแผงห่างแนวตอม่อ railGap/2 → ช่องว่างราวระหว่างช่วง = railGap
+    const lay = handrailLayout(Object.assign({}, p, { postEnd: p.railGap / 2 + 0.03025, fillRail: true }), d.L);
     const items = [], H = p.handrailHeight;
     for (const sg of [-1, 1]) {
       const z = sg * (z1 - 0.05);
       for (const [xa, xb] of lay.panels) {
         for (let k = 0; k <= p.panelBays; k++) items.push({ x: xa + ((xb - xa) * k) / p.panelBays, y: yw + H / 2, z, r: 0.03025, len: H, axis: 'y' });
-        items.push({ x: (xa + xb) / 2, y: yw + H, z, r: 0.03025, len: xb - xa + 0.1, axis: 'x' });
+        items.push({ x: (xa + xb) / 2, y: yw + H, z, r: 0.03025, len: xb - xa, axis: 'x' });
         for (const hh of [0.34, 0.64]) items.push({ x: (xa + xb) / 2, y: yw + hh, z, r: 0.0243, len: xb - xa, axis: 'x' });
       }
     }
     g.add(mergedPipes(items, MATERIALS.steel, 'handrail'));
   }
-  addTracks(g, d, B(0), B(tp.n) - B(0));
+  addTracks(g, d, B(0), B(tp.n) - B(0), 0, d.L);   // หมอนในช่วงโครงถัก · รางต่อเนื่องเต็มช่วงตอม่อ
   return g;
 }
 
@@ -1828,7 +1847,7 @@ function buildBridge(input) {
       const sides = [[spanDims[i - 1], -1], [spanDims[i], 1]].filter(([sd]) => sd && sd.tp);
       if (sides.length) {
         kit.pads = [];
-        sides.forEach(([sd, sg]) => [-sd.trussZ, sd.trussZ].forEach((z) => kit.pads.push({ x: sg * Math.max(0.35, sd.tp.off), z })));
+        sides.forEach(([sd, sg]) => [-sd.trussZ, sd.trussZ].forEach((z) => kit.pads.push({ x: sg * (sd.tp.off + 0.1), z })));
       }
     }
     const pier = buildPier(d, kit);
