@@ -26,6 +26,16 @@
  * ── v3.5.1 = v3.4.1 + v3.5 ──
  *   v3.4.1 รอยต่อระหว่างช่วงสะพานเหล็ก: trussGap / railGap · รางต่อเนื่อง · ราวเต็มช่วง · แผ่นยางที่ tp.off + 0.10
  *   ปลายคอร์ดล่างไม่ฝังกำแพงหลังตับแบบที่นั่งคานอีก (ผิวเหล็กห่างผิวกำแพงหลัง trussGap/2)
+ *
+ * ── v3.6 ทางเดินข้างสะพานเหล็กตามแบบ SIDE WALK (Section 3 / Plan 1 / Elevation 2) ──
+ *   ราวสองแนว (ใน + นอก) ห่าง c/c sidewalkWidth 1.00 · ราวในห่างแนวคอร์ดล่าง (web) sidewalkOffset 0.39
+ *   แขนยื่น SW_SB1 WF150×100 ใต้เสาทุกคู่ ยาว 1.493 (ปลายนอกเลยเสานอก 0.073) · ผิวบนต่ำกว่ายอดคอร์ดล่าง 0.375
+ *   SW_SB2 BOX 100×50 ตามยาว 3 เส้น · แผ่นตาหมากรุก 4 มม. กว้าง 0.98 · ผิวพื้นสูงจากฐานเสา 0.105
+ *   เสาและราวบน Ø60.5 · ราวกลาง Ø48.6 · ราวที่ 0.505 / 0.805 / 1.105 จากฐานเสา (0.40 / 0.70 / 1.00 จากผิวพื้น)
+ *   แผงราวยาวช่องละ 5.00 (sidewalkPanels): แผงเริ่ม เสา 0.15 / 0.80 / 1.50 / 2.50 / 3.50 / 4.50 · แผงใน เสาที่ 0.50 + 1.00 × 4
+ *   แผงสุดท้าย mirror แผงเริ่ม · ช่องว่างระหว่างแผง railGap 0.007 · ปลายราวห่างแนวตอม่อ 0.03 (Elevation 120 / 4970)
+ *   ระยะเสาวัดกึ่งกลางเสา · ช่วงที่ไม่ลงตัว 5.00 ปรับสัดส่วนระยะเสาตามความยาวแผง
+ *   ความกว้างพื้น (deckWidth) / ตอม่อริมคงเดิม — ทางเดินอยู่ด้านนอก
  */
 (function (root) {
   'use strict';
@@ -155,8 +165,47 @@ const DEFAULTS = Object.freeze({
   dmH: 0.428, dmB: 0.407, dmShape: 'H',
   // ── v3.4.1: รอยต่อระหว่างช่วง ──
   trussGap: 0.07,       // ช่องว่างระหว่างผิวเหล็กนอกสุดของโครงถักสองช่วง (ม.) · 0 = ใช้ช่องปลาย endPanel แบบเดิม
-  railGap: 0.10         // ช่องว่างราวทางเดินข้าง/พื้นทางเดินระหว่างช่วง (ม.)
+  railGap: 0.007,       // v3.6: ช่องว่างระหว่างแผงราว/พื้นทางเดิน (ม.) — แบบ 3.5 + 3.5 มม.
+  sidewalkOffset: 0.39  // v3.6: แนวคอร์ดล่าง (web) ถึงศูนย์กลางเสาราวใน (ม.)
 });
+
+/* ---------- ทางเดินข้างสะพานเหล็ก (v3.6 แบบ SIDE WALK SECTION) ----------
+   z วัดจากแนวสะพาน (ด้านบวก) · y = deckLevel (ยอดคอร์ดล่าง) */
+function sidewalkSection(p, y, zt) {
+  const zIn = zt + p.sidewalkOffset, zOut = zIn + p.sidewalkWidth;
+  const yBase = y - 0.375;                       // ผิวบน SW_SB1 = ฐานเสา
+  return {
+    zIn, zOut, zArm0: zt, zArm1: zOut + 0.073,   // SW_SB1 จาก web คอร์ดล่าง ถึงเลยเสานอก 0.073 (1.493 เมื่อ offset 0.39 + c/c 1.00)
+    yBase, yPlate: yBase + 0.105, postH: 1.105,
+    rails: [0.505, 0.805, 1.105],               // จากฐานเสา · ราวบน Ø60.5 ราวกลาง Ø48.6
+    plateW: Math.max(0.2, p.sidewalkWidth - 0.02),
+    boxZ: [zIn + 0.07, (zIn + zOut) / 2, zOut - 0.07]
+  };
+}
+
+/* แผงราวทางเดินข้าง: แผงละ 5.00 ม. (สัดส่วนตามช่วง) · ระยะเสาวัดกึ่งกลางเสา
+   แผงเริ่ม 0.15 / 0.80 / 1.50 / 2.50 / 3.50 / 4.50 · แผงใน 0.50 + 1.00 × 4 · แผงสุดท้าย mirror แผงเริ่ม
+   ช่องว่างระหว่างแผง railGap (3.5 + 3.5 มม.) · ปลายราวที่แนวตอม่อห่าง 0.03 */
+function sidewalkPanels(L, p) {
+  const n = Math.max(1, Math.round(L / 5)), P = L / n, s = P / 5, gh = p.railGap / 2, END = 0.03;
+  const START = [0.15, 0.80, 1.50, 2.50, 3.50, 4.50], INNER = [0.5, 1.5, 2.5, 3.5, 4.5];
+  const out = [];
+  if (n === 1) {
+    const posts = [0.15, 0.80, 1.50].map((v) => v * s);
+    const right = posts.map((v) => L - v).reverse();
+    const a = posts[posts.length - 1], b = right[0], k = Math.max(1, Math.round((b - a) / 1.0));
+    for (let i = 1; i < k; i++) posts.push(a + ((b - a) * i) / k);
+    out.push({ xa: END, xb: L - END, posts: posts.concat(right).map(r3) });
+    return out;
+  }
+  for (let k = 0; k < n; k++) {
+    const x0 = k * P;
+    if (k === 0) out.push({ xa: END, xb: P - gh, posts: START.map((v) => r3(v * s)) });
+    else if (k === n - 1) out.push({ xa: x0 + gh, xb: L - END, posts: START.map((v) => r3(L - v * s)).reverse() });
+    else out.push({ xa: x0 + gh, xb: x0 + P - gh, posts: INNER.map((v) => r3(x0 + v * s)) });
+  }
+  return out;
+}
 
 /* แบบมาตรฐานสะพานเหล็กโครงถักของโครงการ (ช่องละ 5.00 ม. · เสาปลายเอียง 1 ช่อง · ท่อนตั้งทุกจุด · ค้ำล่าง X ทุกช่อง
    ระบบพื้นเหล็กเปิด: คานขวางทุกจุด · stringer คู่ใต้ราง · หมอนเหล็ก · ทางเดินข้างข้างละ 1.00 ม.) */
@@ -274,7 +323,7 @@ const LIMITS = Object.freeze({
   endBlock: [0, 6], endTaper: [0, 3],
   seatFront: [0.4, 2], backwallThick: [0.2, 0.8], corbelWidth: [0, 0.8], corbelDrop: [0.2, 1.5], corbelVert: [0, 1], corbelTaper: [0, 1],
   panel: [2, 15], endPanel: [2, 15], trussSpacing: [5, 16], trussHeight: [3, 25], trussHeightMax: [3, 30], riseNodes: [0, 20],
-  sidewalkWidth: [0.5, 2.5], trussGap: [0, 1], railGap: [0, 1], floorBeamDepth: [0.4, 2], stringerDepth: [0.2, 1.5],
+  sidewalkWidth: [0.5, 2.5], trussGap: [0, 1], railGap: [0, 1], sidewalkOffset: [0, 1.5], floorBeamDepth: [0.4, 2], stringerDepth: [0.2, 1.5],
   tcH: [0.2, 1.5], tcB: [0.2, 1.5], bcH: [0.2, 1.5], bcB: [0.2, 1.5], vmH: [0.15, 1], vmB: [0.15, 1], dmH: [0.15, 1], dmB: [0.15, 1]
 });
 
@@ -290,6 +339,7 @@ const SPAN_GAP = 0.1;      // ช่องว่างรอยต่อระ�
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const r1 = (v) => Math.round(v * 10) / 10;
 const r2 = (v) => Math.round(v * 100) / 100;
+const r3 = (v) => Math.round(v * 1000) / 1000;
 const truthy = (v) => v === true || v === 'true' || v === 'on' || v === 1 || v === '1';
 
 /* ---------- พารามิเตอร์ ---------- */
@@ -1695,28 +1745,33 @@ function buildProjectTruss(d) {
   add(mergeMembers(fb, MATERIALS.steel, 'floor-beam'));
   add(mergeMembers(st, MATERIALS.steel, 'stringer'));
 
-  // ทางเดินข้าง: แขนยื่นทุกจุด · พื้นแผ่นตาหมากรุก · ราวท่อที่ขอบนอก
+  // ทางเดินข้าง (v3.6 ตามแบบ SIDE WALK): แขนยื่นใต้เสาทุกคู่ · BOX ตามยาว · แผ่นตาหมากรุก · ราวใน + ราวนอก
   if (p.sidewalk) {
-    const sw = p.sidewalkWidth, z0 = zt + 0.3, z1 = z0 + sw, yw = y + 0.15;
-    const arms = [], plates = [];
+    const sw = sidewalkSection(p, y, zt);
+    const arms = [], boxes = [], plates = [], bases = [], items = [];
+    const rP = 0.03025, rR = 0.0243;
+    const lay = sidewalkPanels(d.L, p);
     for (const sg of [-1, 1]) {
-      for (let i = 0; i <= tp.n; i++) arms.push({ a: V(B(i), yw - 0.2, sg * (zt + 0.25)), b: V(B(i), yw - 0.2, sg * z1), h: 0.3, w: 0.15, shape: 'I', yRef: UP });
-      // พื้นทางเดินเว้นช่อง railGap ระหว่างช่วง
-      plates.push({ x: d.L / 2, y: yw - 0.02, z: sg * (z0 + z1) / 2, sx: d.L - p.railGap, sy: 0.04, sz: sw });
-    }
-    add(mergeMembers(arms, MATERIALS.steel, 'sidewalk-bracket'));
-    add(mergedBoxes(plates, MATERIALS.grating, 'sidewalk'));
-    // ราว: ผิวเสาปลายแผงห่างแนวตอม่อ railGap/2 → ช่องว่างราวระหว่างช่วง = railGap
-    const lay = handrailLayout(Object.assign({}, p, { postEnd: p.railGap / 2 + 0.03025, fillRail: true }), d.L);
-    const items = [], H = p.handrailHeight;
-    for (const sg of [-1, 1]) {
-      const z = sg * (z1 - 0.05);
-      for (const [xa, xb] of lay.panels) {
-        for (let k = 0; k <= p.panelBays; k++) items.push({ x: xa + ((xb - xa) * k) / p.panelBays, y: yw + H / 2, z, r: 0.03025, len: H, axis: 'y' });
-        items.push({ x: (xa + xb) / 2, y: yw + H, z, r: 0.03025, len: xb - xa, axis: 'x' });
-        for (const hh of [0.34, 0.64]) items.push({ x: (xa + xb) / 2, y: yw + hh, z, r: 0.0243, len: xb - xa, axis: 'x' });
+      for (const pn of lay) {
+        const len = pn.xb - pn.xa, xm = (pn.xa + pn.xb) / 2;
+        for (const z of sw.boxZ) boxes.push({ x: xm, y: sw.yBase + 0.05, z: sg * z, sx: len, sy: 0.10, sz: 0.05 });
+        plates.push({ x: xm, y: sw.yPlate - 0.002, z: sg * (sw.zIn + sw.zOut) / 2, sx: len, sy: 0.004, sz: sw.plateW });
+        for (const z of [sw.zIn, sw.zOut]) {
+          for (const hh of sw.rails) items.push({ x: xm, y: sw.yBase + hh, z: sg * z, r: hh === sw.rails[sw.rails.length - 1] ? rP : rR, len, axis: 'x' });
+        }
+        for (const x of pn.posts) {
+          arms.push({ a: V(x, sw.yBase - 0.075, sg * sw.zArm0), b: V(x, sw.yBase - 0.075, sg * sw.zArm1), h: 0.15, w: 0.10, shape: 'I', yRef: UP });
+          for (const z of [sw.zIn, sw.zOut]) {
+            items.push({ x, y: sw.yBase + sw.postH / 2, z: sg * z, r: rP, len: sw.postH, axis: 'y' });
+            bases.push({ x, y: sw.yBase + 0.006, z: sg * z, sx: 0.16, sy: 0.012, sz: 0.16 });
+          }
+        }
       }
     }
+    add(mergeMembers(arms, MATERIALS.steel, 'sidewalk-bracket'));
+    add(mergedBoxes(boxes, MATERIALS.steel, 'sidewalk-stringer'));
+    add(mergedBoxes(bases, MATERIALS.steel, 'handrail-base'));
+    add(mergedBoxes(plates, MATERIALS.grating, 'sidewalk'));
     g.add(mergedPipes(items, MATERIALS.steel, 'handrail'));
   }
   addTracks(g, d, B(0), B(tp.n) - B(0), 0, d.L);   // หมอนในช่วงโครงถัก · รางต่อเนื่องเต็มช่วงตอม่อ
@@ -1916,7 +1971,7 @@ function findBridgeParams(obj) {
     // v3
     deckLevels, fitLevels, bakeSpan, iGirderSection, iGirderPoints, normalizeLevels,
     // v3.1
-    CB_PRESETS, SB_PRESETS, presetFor, presetParams, applyPreset, parseOffsets, troughSection, handrailLayout,
+    CB_PRESETS, SB_PRESETS, presetFor, presetParams, applyPreset, parseOffsets, troughSection, handrailLayout, sidewalkSection, sidewalkPanels,
     // v3.4
     trussLayout, mergeMembers,
     // v3.2

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 // ตัวสร้างสะพาน (ไฟล์เดียวกับ bpnp-map3d) โหลดเป็นสคริปต์ปกติใน bridge-builder.html
-const { PRESETS, CB_PRESETS, SB_PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA, iGirderPoints, presetParams, handrailLayout } = window.BridgeGen.create(THREE);
+const { PRESETS, CB_PRESETS, SB_PRESETS, normalizeParams, deriveDims, buildBridge, disposeBridge, pierProfileA, iGirderPoints, presetParams, handrailLayout, sidewalkSection } = window.BridgeGen.create(THREE);
 
 export const PARAMS_KEY = 'bpnp.bridge.params';   // แบบที่ใช้งานอยู่ (หน้าวางสะพานอ่านค่านี้)
 const TABS_KEY = 'bpnp.bridge.tabs';              // v3: ค่าของแต่ละแท็บ { active, byKind }
@@ -246,7 +246,7 @@ const f1 = (v) => (Math.round(v * 10) / 10).toLocaleString('th-TH');
 function sectionSvg(d) {
   const p = d.params;
   const VBW = 320, VBH = 220, mL = 46, mR = 14, mT = 28, mB = 22;
-  const halfW = Math.max(d.capLen / 2, d.tp ? d.trussZ + (p.sidewalk ? p.sidewalkWidth + 0.35 : 0.4) : d.truss ? d.trussZ + 0.35 : d.W / 2, ...(d.girderZ || []).map((z) => Math.abs(z) + 0.6));
+  const halfW = Math.max(d.capLen / 2, d.tp ? d.trussZ + (p.sidewalk ? p.sidewalkOffset + p.sidewalkWidth + 0.15 : 0.4) : d.truss ? d.trussZ + 0.35 : d.W / 2, ...(d.girderZ || []).map((z) => Math.abs(z) + 0.6));
   const topY = d.tp ? d.deckLevel - p.bcH / 2 + d.tp.hMax + 0.5
     : d.truss ? d.trussBottomY + d.trussHeight + 0.35
     : d.trough ? d.deckLevel + d.trough.curbTop + (p.handrail ? p.handrailHeight + 0.1 : 0.6)
@@ -330,10 +330,11 @@ function sectionSvg(d) {
     if (p.topKnee) for (const sg of [-1, 1]) out.push(`<line class="s-steel-line" x1="${X(sg * zt)}" y1="${Y(yt - 1.3)}" x2="${X(sg * (zt - 1.3))}" y2="${Y(yt)}"/>`);
     for (const sg of [-1, 1]) out.push(`<line class="s-steel-line" x1="${X(sg * zt)}" y1="${Y(y + 1.0)}" x2="${X(sg * (zt - 0.9))}" y2="${Y(y - 0.1)}"/>`);
     if (p.sidewalk) for (const sg of [-1, 1]) {
-      const z0 = zt + 0.3, z1 = z0 + p.sidewalkWidth, yw = y + 0.15;
-      out.push(rect(Math.min(sg * zt, sg * z1), yw - 0.35, Math.max(sg * zt, sg * z1), yw - 0.05, 's-steel'));
-      out.push(rect(Math.min(sg * z0, sg * z1), yw - 0.04, Math.max(sg * z0, sg * z1), yw, 's-steel'));
-      out.push(rect(sg * (z1 - 0.05) - 0.03, yw, sg * (z1 - 0.05) + 0.03, yw + p.handrailHeight, 's-steel'));
+      // v3.6 แบบ SIDE WALK: แขนยื่น WF150 · แผ่นพื้น · ราวใน + ราวนอก
+      const sw = sidewalkSection(p, y, zt), lo = (a, b) => Math.min(a, b), hi = (a, b) => Math.max(a, b);
+      out.push(rect(lo(sg * sw.zArm0, sg * sw.zArm1), sw.yBase - 0.15, hi(sg * sw.zArm0, sg * sw.zArm1), sw.yBase, 's-steel'));
+      out.push(rect(lo(sg * (sw.zIn + 0.01), sg * (sw.zOut - 0.01)), sw.yPlate - 0.02, hi(sg * (sw.zIn + 0.01), sg * (sw.zOut - 0.01)), sw.yPlate, 's-steel'));
+      for (const z of [sw.zIn, sw.zOut]) out.push(rect(sg * z - 0.03, sw.yBase, sg * z + 0.03, sw.yBase + sw.postH, 's-steel'));
     }
   } else if (d.truss) {
     const zt = d.trussZ, yb = d.trussBottomY, yt = yb + d.trussHeight;
@@ -579,7 +580,7 @@ function renderSummary(d) {
         const lay = handrailLayout(dp, d.L);
         rows.push(['ราวท่อ', `สูง ${f1(dp.handrailHeight)} ม. · ${lay.n} แผง × ${dp.panelBays} ช่อง @ ${lay.bay.toFixed(3)} ม.`]);
       }
-    } else if (d.tp) rows.push(['ทางเดินข้าง', d.params.sidewalk ? `ข้างละ ${f1(d.params.sidewalkWidth)} ม. · ราวท่อสูง ${f1(d.params.handrailHeight)} ม.` : 'ไม่มี']);
+    } else if (d.tp) rows.push(['ทางเดินข้าง', d.params.sidewalk ? `ราวใน + ราวนอก c/c ${d.params.sidewalkWidth.toFixed(2)} ม. · ราวในห่างคอร์ดล่าง ${d.params.sidewalkOffset.toFixed(2)} ม. · ราวสูง 1.00 ม. แผงละ 5.00 ม.` : 'ไม่มี']);
     else rows.push(['ราว', d.railZ.length ? `${d.railZ.length} แนว · ${p.railingStyle === 'wall' ? 'กำแพงคอนกรีต' : 'ราวเหล็ก'} สูง ${f1(p.railingHeight)} ม.` : 'ไม่มี']);
     if (d.overpass) {
       rows.push(['ระดับพื้นรายต้น', d.levels.map(f1).join(' / ') + ' ม.']);

@@ -167,7 +167,7 @@
           <div class="grid2">
             <label class="field"><span>ช่อง / ช่องปลาย (ม.)</span><span class="row2"><input name="panel" type="number" min="2" max="15" step="0.05" inputmode="decimal" aria-label="ระยะช่อง"><input name="endPanel" type="number" min="2" max="15" step="0.05" inputmode="decimal" aria-label="ช่องปลาย"></span></label>
             <label class="field"><span>ระยะโครงถัก (ม.)</span><input name="trussSpacing" type="number" min="5" max="16" step="0.05" inputmode="decimal"></label>
-            <label class="field"><span>ช่องว่างรอยต่อ โครงถัก / ราว (ม.)</span><span class="row2"><input name="trussGap" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="ช่องว่างระหว่างผิวเหล็กโครงถักสองช่วง"><input name="railGap" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="ช่องว่างราวระหว่างช่วง"></span><small>โครงถัก &gt; 0 = ช่องปลายคำนวณให้</small></label>
+            <label class="field"><span>ช่องว่างรอยต่อ โครงถัก / ราว (ม.)</span><span class="row2"><input name="trussGap" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="ช่องว่างระหว่างผิวเหล็กโครงถักสองช่วง"><input name="railGap" type="number" min="0" max="1" step="0.001" inputmode="decimal" aria-label="ช่องว่างระหว่างแผงราวทางเดินข้าง"></span><small>โครงถัก &gt; 0 = ช่องปลายคำนวณให้ · ราว = ช่องว่างระหว่างแผง (แบบ 0.007)</small></label>
             <label class="field"><span>สูงที่ปลาย / สูงสุด (ม.)</span><span class="row2"><input name="trussHeight" type="number" min="3" max="25" step="0.05" inputmode="decimal" aria-label="ความสูงที่ปลาย"><input name="trussHeightMax" type="number" min="3" max="30" step="0.05" inputmode="decimal" aria-label="ความสูงสูงสุด"></span></label>
             <label class="field"><span>ช่องที่คอร์ดบนลาดขึ้น</span><input name="riseNodes" type="number" min="0" max="20" step="1" inputmode="numeric"><small>0 = คอร์ดบนตรง</small></label>
             <label class="field"><span>ท่อนทแยง</span>
@@ -179,8 +179,8 @@
           <label class="check"><input type="checkbox" name="swayV"><span>ค้ำโยก V คว่ำ</span></label>
           <label class="check"><input type="checkbox" name="topKnee"><span>ค้ำมุมบน</span></label>
           <label class="check"><input type="checkbox" name="sidewalk"><span>ทางเดินข้างนอกโครงถัก</span></label>
-          <label class="field" id="sidewalk-width"><span>ทางเดินกว้าง (ม.)</span><input name="sidewalkWidth" type="number" min="0.5" max="2.5" step="0.05" inputmode="decimal"></label>
-          <small class="note">ความกว้างพื้นคำนวณจากระยะโครงถัก + ทางเดินข้าง · ขนาดชิ้นส่วนตามแบบ 75 / 100 ม.</small>
+          <label class="field" id="sidewalk-width"><span>ทางเดิน: ราวใน–ราวนอก c/c / คอร์ดล่าง–ราวใน (ม.)</span><span class="row2"><input name="sidewalkWidth" type="number" min="0.5" max="2.5" step="0.01" inputmode="decimal" aria-label="ระยะศูนย์กลางเสาราวในถึงราวนอก"><input name="sidewalkOffset" type="number" min="0" max="1.5" step="0.01" inputmode="decimal" aria-label="ระยะแนวคอร์ดล่างถึงเสาราวใน"></span><small>แบบ SIDE WALK: 1.00 / 0.39 · ราวสองแนว แผงละ 5.00 ม.</small></label>
+          <small class="note">ความกว้างพื้น/ตอม่อริมคำนวณจากระยะโครงถัก + ทางเดินข้าง (ทางเดินตามแบบอยู่นอกตอม่อริม) · ขนาดชิ้นส่วนตามแบบ 75 / 100 ม.</small>
         </div>
       </div>
 
