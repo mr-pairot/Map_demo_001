@@ -36,6 +36,10 @@
  *   แผงสุดท้าย mirror แผงเริ่ม · ช่องว่างระหว่างแผง railGap 0.007 · ปลายราวห่างแนวตอม่อ 0.03 (Elevation 120 / 4970)
  *   ระยะเสาวัดกึ่งกลางเสา · ช่วงที่ไม่ลงตัว 5.00 ปรับสัดส่วนระยะเสาตามความยาวแผง
  *   ความกว้างพื้น (deckWidth) / ตอม่อริมคงเดิม — ทางเดินอยู่ด้านนอก
+ *
+ * ── v3.6.1 ──
+ *   ตัวปิดขอบแผงราว: ท่อตั้ง Ø60.5 (SW_SB3) จากราวบน 1.105 ลงราวล่าง 0.505 ที่ปลายแผงทุกแผงทั้งสองข้าง
+ *   ราวในและราวนอก รวมปลายราวที่ตอม่อ · ผิวนอกท่อเสมอปลายแผง (ช่องว่างแผงยัง railGap) · มุมฉาก ไม่ดัดโค้ง
  */
 (function (root) {
   'use strict';
@@ -1756,8 +1760,11 @@ function buildProjectTruss(d) {
         const len = pn.xb - pn.xa, xm = (pn.xa + pn.xb) / 2;
         for (const z of sw.boxZ) boxes.push({ x: xm, y: sw.yBase + 0.05, z: sg * z, sx: len, sy: 0.10, sz: 0.05 });
         plates.push({ x: xm, y: sw.yPlate - 0.002, z: sg * (sw.zIn + sw.zOut) / 2, sx: len, sy: 0.004, sz: sw.plateW });
+        const yLo = sw.yBase + sw.rails[0], yHi = sw.yBase + sw.rails[sw.rails.length - 1];
         for (const z of [sw.zIn, sw.zOut]) {
           for (const hh of sw.rails) items.push({ x: xm, y: sw.yBase + hh, z: sg * z, r: hh === sw.rails[sw.rails.length - 1] ? rP : rR, len, axis: 'x' });
+          // v3.6.1 ตัวปิดขอบแผง: ท่อตั้ง Ø60.5 จากราวบนลงราวล่าง ที่ปลายแผงทั้งสองข้าง (ผิวนอกเสมอปลายแผง · มุมฉาก)
+          for (const x of [pn.xa + rP, pn.xb - rP]) items.push({ x, y: (yLo + yHi) / 2, z: sg * z, r: rP, len: yHi - yLo, axis: 'y' });
         }
         for (const x of pn.posts) {
           arms.push({ a: V(x, sw.yBase - 0.075, sg * sw.zArm0), b: V(x, sw.yBase - 0.075, sg * sw.zArm1), h: 0.15, w: 0.10, shape: 'I', yRef: UP });
